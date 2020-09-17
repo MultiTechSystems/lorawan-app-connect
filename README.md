@@ -89,9 +89,9 @@ The application source is located in the mPower file system at /opt/lora/app-con
 * POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/joined
     ```json
     {
-        appeui: '16-ea-76-f6-ab-66-3d-80',
-        gweui: '00-80-00-00-a0-00-0f-4d',
-        remote: false
+        "appeui": "16-ea-76-f6-ab-66-3d-80",
+        "gweui": "00-80-00-00-a0-00-0f-4d",
+        "remote": false
     }
     ```
 
