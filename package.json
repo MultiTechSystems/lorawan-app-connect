@@ -1,0 +1,14 @@
+{
+    "name": "lorawan-test-api",
+    "version": "1.0.0",
+    "description": "Test API for connecting LoRaWAN server to a 3rd Party API",
+    "main": "app.js",
+    "scripts": {
+        "test": "echo \"Error: no test spec\" && exit 1"
+    },
+    "author": "jreiss@multitech.com",
+    "licence": "MIT",
+    "dependencies": {
+        "express": "^4.17.1"
+    }
+}
