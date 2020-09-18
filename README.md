@@ -1,13 +1,19 @@
 # lorawan-app-connect
 Default mPower&trade; LoRaWAN&reg; application and server API implementation for a distributed LoRaWAN network. The application will communicate with the embedded LoRaWAN network server on a MultiTech Conduit&reg; and forward messages to the configured HTTP(S) or MQTT(S) servers. Configuration for a single server can be provided via the mPower WebUI or for multiple servers using the [MultiTech Lens&reg;](https://www.multitech.com/brands/lens) cloud service.
 
+The default application feature allows last mile bi-directional connectivity from the gateway to a cloud application without needing to deploy custom code on each gateway. An existing API can add compatible end-points allowing LoRaWAN uplinks and downlinks to be consumed and produced by the cloud application.
+
+It also provides a starting point for those wanting to bring intelligence to the edge by customizing the default application.
+
 # Architecture
 
 The diagram below show the components for a distributed LoRaWAN network using MultiTech hardware and cloud services with a 3rd Party API. The Conduit can be one of server models such as MTCAP, MTCDT or MTCDTIP running the mPower firmware version 5.3.0 or later.
 
 ![Components](/images/3rd%20Party%20API.png)
 
-# Ladder Diagram
+
+
+# System Messages
 The diagram below shows the messages passed between a LoRaWAN end-device (Dot), LoRaWAN Network Server (Conduit), LoRaWAN Join Server and Application/Network Management Server (Lens) and a 3rd Party API.
 
 ![Ladder Diagram](/images/3rd-Party-API-Ladder.png)
@@ -15,6 +21,8 @@ The diagram below shows the messages passed between a LoRaWAN end-device (Dot), 
 In the diagram the Class A Rx1 Offset has been increased to five seconds to allow the HTTPS request to be returned in time for a possible Class A downlink to be scheduled to the end-device. The HTTPS connection adds latency that can extend beyond the default one second Rx1 Delay.
 
 # Installation
+
+The example API projected should be installed and run on a PC with node.js support installed.
 
 ```bash
 $ npm install
@@ -32,9 +40,14 @@ The application source is located in the mPower file system at /opt/lora/app-con
 
 # HTTP(S) Applications
 
+A default application can be configured using mPower 5.3.x firmware.
+
+![mPower Network Configuration](/images/LoRaWAN_Networking.png)
+
 ## Application Configuration
 
     url: server URL
+    eui: application identifier
     options:
       server_cert: server certificate
       clent_cert: client certicate
