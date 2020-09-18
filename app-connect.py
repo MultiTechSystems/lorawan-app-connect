@@ -366,6 +366,7 @@ def app_publish_http(app, path, msg, retain=False):
             finally:
                 retry = retry - 1
 
+        # TODO: handle queue size limit
         if not sent and retain:
             http_uplink_queue[app["eui"]].put((path, msg))
 
@@ -380,8 +381,10 @@ def app_publish_http(app, path, msg, retain=False):
             data_json = json.loads(data)
 
             if re.match(".*\/up$", path):
+                # TODO: handle list of downlinks
                 if "deveui" in data_json and "data" in data_json:
                     app_schedule_downlink(app, data_json["deveui"], data)
+
             elif re.match(".*\/init$", path):
                 if "timeout" in data_json:
                     http_threads[app["eui"]]["request_timeout"] = data_json["timeout"]

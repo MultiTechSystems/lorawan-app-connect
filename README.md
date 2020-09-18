@@ -13,12 +13,27 @@ The diagram below show the components for a distributed LoRaWAN network using Mu
 
 
 
-# System Messages
+# Network Messages
 The diagram below shows the messages passed between a LoRaWAN end-device (Dot), LoRaWAN Network Server (Conduit), LoRaWAN Join Server and Application/Network Management Server (Lens) and a 3rd Party API.
 
 ![Ladder Diagram](/images/3rd-Party-API-Ladder.png)
 
 In the diagram the Class A Rx1 Offset has been increased to five seconds to allow the HTTPS request to be returned in time for a possible Class A downlink to be scheduled to the end-device. The HTTPS connection adds latency that can extend beyond the default one second Rx1 Delay.
+
+1. The Dot sends join reqeust over-the-air
+2. The Conduit received the join request and forwards the request to the Lens Join Server
+3. The Lens Join Server authenticates the request and issues a Join Accept message
+4. The Conduit receives the Join Accept message, AppEUI and Session Keys from the Lens Join Server
+5. The Conduit send the Join Accept message over-the-air
+6. The Conduit reqeusts additional App Info from Lens if it is not cached
+7. If is a new app the Init Msg is sent to the 3rd Party API
+8. The 3rd Party API returns configuration data in the Init Msg response
+9. A device joined message is sent to the 3rd Party API
+10. When an uplink is received by the Conduit it is forwarded to the 3rd Party API
+11. The 3rd Party API can response to the Uplink message with a list of downlinks
+12. The Conduit will periodically request downlink packets from the 3rd Party API
+13. The Conduit will schedule received downlinks for transmission to a Dot
+
 
 # Installation
 
@@ -59,15 +74,29 @@ A default application can be configured using mPower 5.3.x firmware.
 ### Paths
 
 * POST /api/lorawan/v1/\<APP-EUI>/\<GW-UUID>/init
+  * BODY
     ```json
     { "gateways_euis": [ "00-80-00-00-a0-00-0f-4d" ] }
     ```
+  * RESPONSE
+    * The response can contain configuration data for the application on Conduit.
+      * Timeout in seconds for HTTP requests
+      * Queue size for the number of requests to retain while disconnected
+      * Downlink query interval for the number of seconds between HTTP requests for downlinks
+    ```json
+    {
+        "timeout": 20,
+        "queue_size": 10,
+        "downlink_query_interval": 30
+    }
+    ```
+
 
 * POST /api/lorawan/v1/\<APP-EUI>/\<GW-UUID>/close
 
 * POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/up
   * Field descriptions can be found on [multitech.net](https://www.multitech.net/developer/software/lora/lora-network-server/mqtt-messages/)
-
+    * BODY
     ```json
     {
         "tmst": 2450008103,
@@ -97,6 +126,13 @@ A default application can be configured using mPower 5.3.x firmware.
         "gweui": "00-80-00-00-a0-00-0f-4d",
         "seqn": 27
     }
+    ```
+  * RESPONSE
+    * The API can send any downlinks in the response
+    ```json
+    [
+        {"deveui":"00-11-22-33-44-55-66-77", "data": "AQ=="}
+    ]
     ```
 
 * POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/joined
