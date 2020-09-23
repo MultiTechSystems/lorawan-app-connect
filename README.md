@@ -135,6 +135,61 @@ A default application can be configured using mPower 5.3.x firmware.
     ]
     ```
 
+  * POST /api/lorawan/v1/\<APP-EUI>/up
+  * If more than one uplink is available to be sent, up to ten may be sent in an array to the APP-EUI uplink path, this helps if many uplinks are being received in a burst.
+  * Field descriptions can be found on [multitech.net](https://www.multitech.net/developer/software/lora/lora-network-server/mqtt-messages/)
+    * BODY
+    ```json
+    [
+      {
+          "tmst": 2450008103,
+          "time": "2020-09-16T18:29:35.263610Z",
+          "tmms": 1284316193263,
+          "chan": 8,
+          "rfch": 0,
+          "freq": 904.6,
+          "stat": 1,
+          "modu": "LORA",
+          "datr": "SF8BW500",
+          "codr": "4/5",
+          "lsnr": 10,
+          "rssi": -66,
+          "opts": "",
+          "size": 7,
+          "fcnt": 27,
+          "cls": 0,
+          "port": 1,
+          "mhdr": "4012233112801b00",
+          "data": "bWVzc2FnZQ==",
+          "appeui": "16-ea-76-f6-ab-66-3d-80",
+          "deveui": "00-80-00-00-00-01-58-34",
+          "devaddr": "12312312",
+          "ack": false,
+          "adr": true,
+          "gweui": "00-80-00-00-a0-00-0f-4d",
+          "seqn": 27
+      },
+      {
+          "tmst": 2451008103,
+          "time": "2020-09-16T18:29:36.263610Z",
+          ...
+          "deveui": "00-80-00-00-00-03-33-34",
+          "devaddr": "0013FABE",
+          "ack": false,
+          "adr": true,
+          "gweui": "00-80-00-00-a0-00-0f-4d",
+          "seqn": 894
+      }
+    ]
+    ```
+  * RESPONSE
+    * The API can send any downlinks in the response
+    ```json
+    [
+        {"deveui":"00-11-22-33-44-55-66-77", "data": "AQ=="}
+    ]
+    ```
+
 * POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/joined
     ```json
     {
@@ -176,12 +231,14 @@ A default application can be configured using mPower 5.3.x firmware.
 
 ## MQTT Protocol
 
-* Publish lorawan/\<APP-EUI>/\<GW-UUID>/init
-* Publish lorawan/\<APP-EUI>/\<GW-UUID>/close
-* Publish lorawan/\<APP-EUI>/\<GW-UUID>/disconnected
-* Publish lorawan/\<APP-EUI>/\<DEV-EUI>/up
-* Publish lorawan/\<APP-EUI>/\<DEV-EUI>/joined
-* Subscribe lorawan/\<APP-EUI>/\<DEV-EUI>/down
+* Publish
+  * lorawan/\<APP-EUI>/\<GW-UUID>/init
+  * lorawan/\<APP-EUI>/\<GW-UUID>/close
+  * lorawan/\<APP-EUI>/\<GW-UUID>/disconnected
+  * lorawan/\<APP-EUI>/\<DEV-EUI>/up
+  * lorawan/\<APP-EUI>/\<DEV-EUI>/joined
+* Subscribe
+  * lorawan/\<APP-EUI>/\<DEV-EUI>/down
 
 ### Test brokers
 

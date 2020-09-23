@@ -16,7 +16,7 @@ import logging.handlers
 import socket
 import gzip
 
-from httplib import BadStatusLine, ResponseNotReady
+from httplib import BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader
 from collections import deque
 
 
@@ -37,6 +37,7 @@ app_http_prefix = "/api/v1/"
 app_http_init_path = app_http_prefix + "lorawan/%s/%s/init"
 app_http_close_path = app_http_prefix + "lorawan/%s/%s/close"
 app_http_uplink_path = app_http_prefix + "lorawan/%s/%s/up"
+app_http_uplink_app_path = app_http_prefix + "lorawan/%s/up"
 app_http_downlink_path = app_http_prefix + "lorawan/%s/down"
 app_http_joined_path = app_http_prefix + "lorawan/%s/%s/joined"
 
@@ -331,6 +332,10 @@ def app_publish_msg(app, topic, msg):
             logging.info('MQTT Client is not connected')
             logging.info('store and forward not implemented')
     elif app["isHttp"]:
+        if app["eui"] in http_uplink_queue:
+            while (http_uplink_queue[app["eui"]].qsize() >= http_threads[app["eui"]]["queue_size"]):
+                http_uplink_queue[app["eui"]].get()
+                http_uplink_queue[app["eui"]].task_done()
         http_uplink_queue[app["eui"]].put((topic,msg))
 
 
@@ -360,16 +365,17 @@ def app_publish_http(app, path, msg, retain=False):
             except (IOError, KeyboardInterrupt), e:
                 print "Request exception", e
                 http_clients[app["eui"]].close()
-            except (BadStatusLine, ResponseNotReady), e:
+            except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError), e:
                 print "Response exception", e
                 http_clients[app["eui"]].close()
             finally:
                 retry = retry - 1
 
-        # TODO: handle queue size limit
         if not sent and retain:
+            while (http_uplink_queue[app["eui"]].qsize() >= http_threads[app["eui"]]["queue_size"]):
+                http_uplink_queue[app["eui"]].get()
+                http_uplink_queue[app["eui"]].task_done()
             http_uplink_queue[app["eui"]].put((path, msg))
-
 
     else:
         logging.error("App net not found")
@@ -381,9 +387,13 @@ def app_publish_http(app, path, msg, retain=False):
             data_json = json.loads(data)
 
             if re.match(".*\/up$", path):
-                # TODO: handle list of downlinks
-                if "deveui" in data_json and "data" in data_json:
-                    app_schedule_downlink(app, data_json["deveui"], data)
+                if isinstance(data_json, list):
+                    for item in data_json:
+                        if "deveui" in item and "data" in item:
+                            app_schedule_downlink(app, item["deveui"], json.dumps(item))
+                else:
+                    if "deveui" in data_json and "data" in data_json:
+                        app_schedule_downlink(app, data_json["deveui"], data)
 
             elif re.match(".*\/init$", path):
                 if "timeout" in data_json:
@@ -407,8 +417,6 @@ def on_mqtt_message(client, userdata, msg):
     global apps
     global mqtt_clients
 
-    logging.info("LOCAL MESSAGE Topic: " + msg.topic + '\nMessage: ' + str(msg.payload))
-    #BT - Extract out the mac address in the topic
     parts = msg.topic.split('/')
     appeui = ""
     deveui = parts[1]
@@ -419,9 +427,7 @@ def on_mqtt_message(client, userdata, msg):
         deveui = parts[2]
         event = parts[3]
 
-    logging.info("Device eui: " + deveui)
-    logging.info("App eui: " + appeui)
-    logging.info("Event: " + event)
+    logging.info("Device eui: " + deveui + " App eui: " + appeui + " Event: " + event)
 
     if event == "joined":
         logging.info("Device joined " + deveui)
@@ -486,9 +492,40 @@ def http_uplink_thread(appeui):
         #     time.sleep(5)
         #     continue
 
-        msg = http_uplink_queue[appeui].get()
-        app_publish_http(apps[appeui], msg[0], msg[1], True)
-        http_uplink_queue[appeui].task_done()
+
+        if (http_uplink_queue[appeui].qsize() > 1):
+            msg = None
+            msgs = []
+            cnt = 0
+            join_break = False
+            while not http_uplink_queue[appeui].empty() and cnt < 10:
+                msg = http_uplink_queue[appeui].get()
+                if msg is None:
+                    http_uplink_queue[appeui].task_done()
+                    break
+
+                if len(msg) == 2 and len(msg[1]) > 700:
+                    http_uplink_queue[appeui].task_done()
+                    break
+
+                if re.match(".*\/joined$", msg[0]):
+                    join_break = True
+                    http_uplink_queue[appeui].task_done()
+                    break
+
+                msgs.append(json.loads(msg[1]))
+                http_uplink_queue[appeui].task_done()
+                cnt = cnt + 1
+
+            if len(msgs) > 0:
+                app_publish_http(apps[appeui], app_http_uplink_app_path % (appeui), json.dumps(msgs), True)
+
+            if join_break:
+                app_publish_http(apps[appeui], msg[0], msg[1], True)
+        else:
+            msg = http_uplink_queue[appeui].get()
+            app_publish_http(apps[appeui], msg[0], msg[1], True)
+            http_uplink_queue[appeui].task_done()
 
 
     logging.info("uplink thread %s exited", appeui)
@@ -532,12 +569,12 @@ def http_downlink_thread(appeui):
                         res = http_clients[appeui].getresponse()
                         logging.info("%d %s", res.status, res.reason)
                         data = res.read()
-                        logging.info(data)
+                        logging.info("API Response: " + data)
                         break
                 except (IOError, KeyboardInterrupt), e:
                     print "Exception during request GET", e
                     http_clients[appeui].close()
-                except (BadStatusLine, ResponseNotReady), e:
+                except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError), e:
                     print "Exception during GET response", e
                     http_clients[appeui].close()
                 finally:
@@ -551,7 +588,7 @@ def http_downlink_thread(appeui):
             try:
                 downlinks = json.loads(data)
 
-                if len(downlinks) > 0:
+                if isinstance(downlinks, list):
                     for downlink in downlinks:
                         if "deveui" in downlink and "data" in downlink:
                             app_schedule_downlink(apps[appeui], downlink["deveui"], json.dumps(downlink))
@@ -744,11 +781,12 @@ if default_app["enabled"]:
         mqtt_clients[default_app["eui"]].loop_stop()
 
     if apps[default_app["eui"]]["isHttp"]:
-
-        http_threads[default_app["eui"]]["running"] = False
         app_publish_msg(apps[default_app["eui"]], app_http_close_path % ( default_app["eui"], gw_uuid ), None)
 
         time.sleep(5)
+
+        http_threads[default_app["eui"]]["running"] = False
+        app_publish_msg(apps[default_app["eui"]], "", None)
 
         with http_threads[default_app["eui"]]["downlink_cond"]:
             http_threads[default_app["eui"]]["downlink_cond"].notify()
@@ -764,11 +802,12 @@ for app in app_list:
         mqtt_clients[app["eui"]].loop_stop()
     if app["eui"] in http_clients:
 
-        http_threads[app["eui"]]["running"] = False
-
         app_publish_msg(apps[app["eui"]], app_http_close_path % ( app["eui"], gw_uuid ), None)
 
         time.sleep(5)
+
+        http_threads[app["eui"]]["running"] = False
+        app_publish_msg(apps[app["eui"]], "", None)
 
         with http_threads[app["eui"]]["downlink_cond"]:
             http_threads[app["eui"]]["downlink_cond"].notify()
