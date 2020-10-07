@@ -500,15 +500,12 @@ def http_uplink_thread(appeui):
             join_break = False
             while not http_uplink_queue[appeui].empty() and cnt < 10:
                 msg = http_uplink_queue[appeui].get()
+
                 if msg is None:
                     http_uplink_queue[appeui].task_done()
                     break
 
-                if len(msg) == 2 and len(msg[1]) > 700:
-                    http_uplink_queue[appeui].task_done()
-                    break
-
-                if re.match(".*\/joined$", msg[0]):
+                if len(msg) == 2 and (len(msg[1]) > 700 or re.match(".*\/joined$", msg[0])):
                     join_break = True
                     http_uplink_queue[appeui].task_done()
                     break
