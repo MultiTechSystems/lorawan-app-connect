@@ -264,13 +264,18 @@ def setup_http_app(app_net):
 
 
 def setup_app(app_net):
-    if "url" in app_net:
+    if "url" in app_net and len(app_net["url"]) > 0:
         if re.match('^mqtt(s)?://', app_net["url"]):
             logging.info("Call setup MQTT App")
             setup_mqtt_app(app_net)
         elif re.match('^http(s)?://', app_net["url"]):
             setup_http_app(app_net)
-
+        else:
+            apps[app_net["eui"]]["isMqtt"] = False
+            apps[app_net["eui"]]["isHttp"] = False
+    else:
+        apps[app_net["eui"]]["isMqtt"] = False
+        apps[app_net["eui"]]["isHttp"] = False
 
 
 
@@ -370,6 +375,8 @@ def app_publish_http(app, path, msg, retain=False):
                 http_clients[app["eui"]].close()
             finally:
                 retry = retry - 1
+                if not sent:
+                    time.sleep(5)
 
         if not sent and retain:
             while (http_uplink_queue[app["eui"]].qsize() >= http_threads[app["eui"]]["queue_size"]):
