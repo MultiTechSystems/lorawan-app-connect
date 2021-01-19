@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 import paho.mqtt.client as mqtt
 import sys
@@ -9,14 +9,14 @@ import re
 import tempfile
 import signal
 import time
-import httplib
-import threading, Queue
+import http.client
+import threading, queue
 import logging
 import logging.handlers
 import socket
 import gzip
 
-from httplib import BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader
+from http.client import BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader
 from collections import deque
 
 
@@ -64,7 +64,7 @@ def custom_app_downlink_handler(app, topic, msg):
 
 
 
-class GZipRotator:
+class GZipRotator(object):
     def __call__(self, source, dest):
         os.rename(source, dest)
         f_in = open(dest, 'rb')
@@ -225,7 +225,7 @@ def setup_http_app(app_net):
         if len(parts) == 3:
             port = int(parts[2])
 
-        http_clients[app_net["eui"]] = httplib.HTTPSConnection(parts[1][2:], port, context=context, timeout=request_timeout)
+        http_clients[app_net["eui"]] = http.client.HTTPSConnection(parts[1][2:], port, context=context, timeout=request_timeout)
 
     else:
         port = 80
@@ -233,10 +233,10 @@ def setup_http_app(app_net):
             port = int(parts[2])
 
         # http.client.HTTPConnection(host, port=None, [timeout, ]source_address=None, blocksize=8192
-        http_clients[app_net["eui"]] = httplib.HTTPConnection(parts[1][2:], port, timeout=request_timeout)
+        http_clients[app_net["eui"]] = http.client.HTTPConnection(parts[1][2:], port, timeout=request_timeout)
 
 
-    http_uplink_queue[app_net["eui"]] = Queue.Queue()
+    http_uplink_queue[app_net["eui"]] = queue.Queue()
     http_threads[app_net["eui"]] = {}
 
     http_threads[app_net["eui"]]["running"] = True
@@ -299,7 +299,6 @@ def on_mqtt_app_message(client, userdata, msg):
 
     if event == "down":
         app_schedule_downlink(apps[appeui], deveui, msg.payload)
-
 
 
 def app_schedule_downlink(app, deveui, msg):
@@ -367,11 +366,11 @@ def app_publish_http(app, path, msg, retain=False):
                     logging.info(data)
                     sent = True
                     break
-            except (IOError, KeyboardInterrupt), e:
-                print "Request exception", e
+            except (IOError, KeyboardInterrupt) as e:
+                print("Request exception", e)
                 http_clients[app["eui"]].close()
-            except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError), e:
-                print "Response exception", e
+            except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError) as e:
+                print("Response exception", e)
                 http_clients[app["eui"]].close()
             finally:
                 retry = retry - 1
@@ -575,11 +574,11 @@ def http_downlink_thread(appeui):
                         data = res.read()
                         logging.info("API Response: " + data)
                         break
-                except (IOError, KeyboardInterrupt), e:
-                    print "Exception during request GET", e
+                except (IOError, KeyboardInterrupt) as e:
+                    print("Exception during request GET", e)
                     http_clients[appeui].close()
-                except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError), e:
-                    print "Exception during GET response", e
+                except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError) as e:
+                    print("Exception during GET response", e)
                     http_clients[appeui].close()
                 finally:
                     retry = retry - 1
