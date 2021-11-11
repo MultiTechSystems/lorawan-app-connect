@@ -7,7 +7,7 @@
         "test": "echo \"Error: no test spec\" && exit 1"
     },
     "author": "jreiss@multitech.com",
-    "licence": "MIT",
+    "licence": "Apache-2.0",
     "dependencies": {
         "express": "^4.17.1"
     }
