@@ -51,6 +51,8 @@ app_mqtt_uplink_topic = "lorawan/%s/%s/up"
 app_mqtt_downlink_topic = "lorawan/%s/%s/down"
 
 
+app_config = {}
+
 
 def custom_app_uplink_handler(app, topic, msg):
     # print("Custom app uplink", topic, msg)
@@ -111,40 +113,48 @@ def setup_mqtt_app(app_net):
 
     if re.match('^mqtts://', app_net["url"]):
         temp = None
-        ca_file = ""
+        ca_file = None
         reqs = None
         cert_file = None
         key_file = None
         check_hostname = True
 
         if "options" in app_net:
-            if "server_cert" in app_net["options"]:
-                ca_file = "/tmp/server-" + app_net["eui"] + ".pem"
-                temp = open(ca_file, "w")
-                temp.write(app_net["options"]["server_cert"])
-                temp.flush()
-                temp.close()
-                reqs=ssl.CERT_REQUIRED
-            if "client_cert" in app_net["options"]:
-                cert_file = "/tmp/client-" + app_net["eui"] + ".pem"
-                temp = open(cert_file, "w")
-                temp.write(app_net["options"]["client_cert"])
-                temp.flush()
-                temp.close()
-            if "apikey" in app_net["options"]:
-                key_file = "/tmp/client-" + app_net["eui"] + ".key"
-                temp = open(key_file, "w")
-                temp.write(app_net["options"]["apikey"])
-                temp.flush()
-                temp.close()
-            if "check_hostname" in app_net["options"]:
-                check_hostname=app_net["options"]["check_hostname"]
+            if "server_cert" in app_net["options"] and isinstance(app_net["options"]["server_cert"], basestring):
+                if app_net["options"]["server_cert"].strip() != "":
+                    ca_file = "/tmp/server-" + app_net["eui"] + ".pem"
+                    temp = open(ca_file, "w")
+                    temp.write(app_net["options"]["server_cert"])
+                    temp.flush()
+                    temp.close()
+                    reqs=ssl.CERT_REQUIRED
+            if "client_cert" in app_net["options"] and isinstance(app_net["options"]["client_cert"], basestring):
+                if app_net["options"]["client_cert"].strip() != "":
+                    cert_file = "/tmp/client-" + app_net["eui"] + ".pem"
+                    temp = open(cert_file, "w")
+                    temp.write(app_net["options"]["client_cert"])
+                    temp.flush()
+                    temp.close()
+            if "apikey" in app_net["options"] and isinstance(app_net["options"]["apikey"], basestring):
+                if app_net["options"]["apikey"].strip() != "":
+                    key_file = "/tmp/client-" + app_net["eui"] + ".key"
+                    temp = open(key_file, "w")
+                    temp.write(app_net["options"]["apikey"])
+                    temp.flush()
+                    temp.close()
+            if "check_hostname" in app_net["options"] and isinstance(app_net["options"]["check_hostname"], bool):
+                check_hostname = app_net["options"]["check_hostname"]
+
+        if ca_file is None:
+            check_hostname = False
+            ca_file = '/var/config/ca-cert-links/ca-certificates.crt'
 
         mqtt_clients[app_net["eui"]].tls_set(ca_certs=ca_file, certfile=cert_file,
                         keyfile=key_file, cert_reqs=reqs,
                         tls_version=ssl.PROTOCOL_TLSv1_2, ciphers=None)
-        if ca_file != "":
-            mqtt_clients[app_net["eui"]].tls_insecure_set(False)
+
+        mqtt_clients[app_net["eui"]].tls_insecure_set(not check_hostname)
+
 
     username = None
     password = None
@@ -186,38 +196,47 @@ def setup_http_app(app_net):
         # http.client.HTTPSConnection(host, port=None, key_file=None, cert_file=None, [timeout, ]source_address=None, *, context=None, check_hostname=None, blocksize=8192)
 
         temp = None
-        ca_file = ""
+        ca_file = None
         reqs = None
         cert_file = None
         key_file = None
         check_hostname = True
 
         if "options" in app_net:
-            if "server_cert" in app_net["options"]:
-                ca_file = "/tmp/server-" + app_net["eui"] + ".pem"
-                temp = open(ca_file, "w")
-                temp.write(app_net["options"]["server_cert"])
-                temp.flush()
-                temp.close()
-                reqs=ssl.CERT_REQUIRED
-            if "client_cert" in app_net["options"]:
-                cert_file = "/tmp/client-" + app_net["eui"] + ".pem"
-                temp = open(cert_file, "w")
-                temp.write(app_net["options"]["client_cert"])
-                temp.flush()
-                temp.close()
-            if "apikey" in app_net["options"]:
-                key_file = "/tmp/client-" + app_net["eui"] + ".key"
-                temp = open(key_file, "w")
-                temp.write(app_net["options"]["apikey"])
-                temp.flush()
-                temp.close()
-            if "check_hostname" in app_net["options"]:
+            if "server_cert" in app_net["options"] and isinstance(app_net["options"]["server_cert"], basestring):
+                if app_net["options"]["server_cert"].strip() != "":
+                    ca_file = "/tmp/server-" + app_net["eui"] + ".pem"
+                    temp = open(ca_file, "w")
+                    temp.write(app_net["options"]["server_cert"])
+                    temp.flush()
+                    temp.close()
+                    reqs=ssl.CERT_REQUIRED
+            if "client_cert" in app_net["options"] and isinstance(app_net["options"]["client_cert"], basestring):
+                if app_net["options"]["client_cert"].strip() != "":
+                    cert_file = "/tmp/client-" + app_net["eui"] + ".pem"
+                    temp = open(cert_file, "w")
+                    temp.write(app_net["options"]["client_cert"])
+                    temp.flush()
+                    temp.close()
+            if "apikey" in app_net["options"] and isinstance(app_net["options"]["apikey"], basestring):
+                if app_net["options"]["apikey"].strip() != "":
+                    key_file = "/tmp/client-" + app_net["eui"] + ".key"
+                    temp = open(key_file, "w")
+                    temp.write(app_net["options"]["apikey"])
+                    temp.flush()
+                    temp.close()
+            if "check_hostname" in app_net["options"] and isinstance(app_net["options"]["check_hostname"], bool):
                 check_hostname = app_net["options"]["check_hostname"]
 
+        if ca_file is None:
+            check_hostname = False
+            ca_file = '/var/config/ca-cert-links/ca-certificates.crt'
+
         context = ssl.create_default_context(ssl.Purpose.SERVER_AUTH, cafile=ca_file)
-        context.load_cert_chain(certfile=cert_file, keyfile=key_file)
         context.check_hostname = check_hostname
+
+        if cert_file and key_file:
+            context.load_cert_chain(certfile=cert_file, keyfile=key_file)
 
 
         # Create a connection to submit HTTP requests
@@ -349,7 +368,7 @@ def app_publish_msg(app, topic, msg):
 
 def app_publish_http(app, path, msg, retain=False):
     logging.info("POST to '%s'", path)
-    headers = {"Content-type": "application/json", "Accept": "text/plain"}
+    headers = {"Content-type": "application/json", "Accept": "*/*"}
 
     data = None
 
@@ -508,11 +527,11 @@ def http_uplink_thread(appeui):
             while not http_uplink_queue[appeui].empty() and cnt < 10:
                 msg = http_uplink_queue[appeui].get()
 
-                if msg is None:
+                if msg is None or (len(msg) != 2 and not (msg[0] or msg[1])):
                     http_uplink_queue[appeui].task_done()
                     break
 
-                if len(msg) == 2 and (len(msg[1]) > 700 or re.match(".*\/joined$", msg[0])):
+                if (len(msg[1]) > 700 or re.match(".*\/joined$", msg[0])):
                     join_break = True
                     http_uplink_queue[appeui].task_done()
                     break
@@ -661,6 +680,7 @@ for gw in gw_list:
 
 
 if "enabled" in default_app and default_app["enabled"]:
+    default_app["eui"] = "-".join(re.findall('..',default_app["eui"].replace("-","").lower()))
     apps[default_app["eui"]] = default_app
     setup_app(default_app)
 
@@ -744,13 +764,14 @@ while run:
         logging.info("Check for app updates")
 
         for test_app in test_app_list:
-            if not test_app["eui"] in apps:
-                apps[test_app["eui"]] = test_app
+            test_eui = test_app["eui"]
+            if not test_eui in apps:
+                apps[test_eui] = test_app
                 setup_app(test_app)
                 continue
 
             for appeui in apps:
-                if appeui == test_app["eui"]:
+                if appeui == test_eui:
                     if not compare_apps(apps[appeui], test_app):
                         if apps[appeui]["isMqtt"]:
                             mqtt_clients[appeui].publish("lorawan/" + appeui + "/" + gw_uuid + "/close", None)
