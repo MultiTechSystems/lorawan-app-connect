@@ -120,7 +120,7 @@ def setup_mqtt_app(app_net):
 
     parts = app_net["url"].split(":")
     client_id = "lorawan/" + app_net["eui"] + "/" + gw_uuid
-    mqtt_clients[app_net["eui"]] = mqtt.Client(client_id, True, app_net)
+    mqtt_clients[app_net["eui"]] = mqtt.Client(client_id, False, app_net)
 
     apps[app_net["eui"]]["isMqtt"] = True
     apps[app_net["eui"]]["isHttp"] = False
@@ -196,7 +196,7 @@ def setup_mqtt_app(app_net):
 
     init_msg = json.dumps({'gateways_euis': gateways})
     topic = app_mqtt_init_topic % ( app_net["eui"], gw_uuid )
-    mqtt_clients[app_net["eui"]].publish(topic, init_msg)
+    mqtt_clients[app_net["eui"]].publish(topic, init_msg, 1, True)
 
 def setup_http_app(app_net):
     global request_timeout
@@ -346,7 +346,7 @@ def app_schedule_downlink(app, deveui, msg):
 
     (topic, msg) = response
 
-    local_client.publish(topic, msg)
+    local_client.publish(topic, msg, 1, True)
 
 
 
@@ -363,12 +363,7 @@ def app_publish_msg(app, topic, msg):
     appeui = app["eui"]
 
     if app["isMqtt"]:
-        if mqtt_clients[str(appeui)].connected_flag:
-            mqtt_clients[str(appeui)].publish(topic, msg)
-        else:
-            # TODO:
-            logging.info('MQTT Client is not connected')
-            logging.info('store and forward not implemented')
+        mqtt_clients[str(appeui)].publish(topic, msg, 1, True)
     elif app["isHttp"]:
         if app["eui"] in http_uplink_queue:
             while (http_uplink_queue[app["eui"]].qsize() >= http_threads[app["eui"]]["queue_size"]):
@@ -450,8 +445,8 @@ def app_publish_http(app, path, msg, retain=False):
 
 def on_mqtt_connect(client, userdata, flags, rc):
     logging.info("Connected with result code "+str(rc))
-    client.subscribe(local_mqtt_sub_up)
-    client.subscribe(local_mqtt_sub_joined)
+    client.subscribe(local_mqtt_sub_up, 1)
+    client.subscribe(local_mqtt_sub_joined, 1)
 
 def on_mqtt_message(client, userdata, msg):
     global apps
@@ -499,7 +494,7 @@ def on_mqtt_message(client, userdata, msg):
             downlink_topic = app_mqtt_downlink_topic % ( appeui, deveui )
 
             logging.info("subscribe for downlinks: %s", downlink_topic)
-            mqtt_clients[appeui].subscribe(str(downlink_topic), 0)
+            mqtt_clients[appeui].subscribe(str(downlink_topic), 1)
 
             joined_topic = app_mqtt_joined_topic % (appeui, deveui)
             app_publish_msg(apps[appeui], joined_topic, msg.payload)
@@ -737,7 +732,7 @@ for dev in dev_list:
         if apps[dev["appeui"]]["isMqtt"] and dev["appeui"] in mqtt_clients:
             topic = app_mqtt_downlink_topic % ( dev["appeui"], dev["deveui"] )
             logging.info("subscribe for downlinks: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 0)
+            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
         if apps[dev["appeui"]]["isHttp"] and dev["appeui"] in http_clients:
             if dev["appeui"] not in http_app_devices:
                 http_app_devices[dev["appeui"]] = []
@@ -788,7 +783,7 @@ while run:
                 if appeui == test_eui:
                     if not compare_apps(apps[appeui], test_app):
                         if apps[appeui]["isMqtt"]:
-                            mqtt_clients[appeui].publish("lorawan/" + appeui + "/" + gw_uuid + "/close", None)
+                            mqtt_clients[appeui].publish("lorawan/" + appeui + "/" + gw_uuid + "/close", None, 1, True)
                             mqtt_clients[appeui].loop_stop()
                             mqtt_clients.pop(appeui, None)
                             apps[appeui] = test_app
