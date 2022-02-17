@@ -314,6 +314,19 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
         client.disconnect_flag=False
         client.will_set(app_mqtt_disconnected_topic % ( userdata["eui"], gw_uuid ), None, 1, retain=False)
 
+        if flags["session present"] == False:
+            # resubscribe for downlinks
+            stream = os.popen('lora-query -x session list json')
+            output = stream.read()
+            dev_list = json.loads(output)
+
+            for dev in dev_list:
+                if dev["appeui"] in apps and userdata["eui"] == dev["appeui"]:
+                    if apps[dev["appeui"]]["isMqtt"] and dev["appeui"] in mqtt_clients:
+                        topic = app_mqtt_downlink_topic % ( dev["appeui"], dev["deveui"] )
+                        logging.info("subscribe for downlinks: %s", topic)
+                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
 def on_mqtt_app_message(client, userdata, msg):
     global local_client
     parts = msg.topic.split('/')
