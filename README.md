@@ -231,14 +231,21 @@ A default application can be configured using mPower 5.3.x firmware.
 
 ## MQTT Protocol
 
-* Publish
+* Publishes
   * lorawan/\<APP-EUI>/\<GW-UUID>/init
   * lorawan/\<APP-EUI>/\<GW-UUID>/close
   * lorawan/\<APP-EUI>/\<GW-UUID>/disconnected
   * lorawan/\<APP-EUI>/\<DEV-EUI>/up
   * lorawan/\<APP-EUI>/\<DEV-EUI>/joined
-* Subscribe
+  * lorawan/\<GW-EUI>/\<DEV-EUI>/moved
+
+* Subscribed
   * lorawan/\<APP-EUI>/\<DEV-EUI>/down
+  * lorawan/\<GW-EUI>/\<DEV-EUI>/down
+  * lorawan/\<GW-UUID>/\<DEV-EUI>/down
+  * lorawan/\<APP-EUI>/\<DEV-EUI>/clear
+  * lorawan/\<GW-EUI>/\<DEV-EUI>/clear
+  * lorawan/\<GW-UUID>/\<DEV-EUI>/clear
 
 ### Test brokers
 

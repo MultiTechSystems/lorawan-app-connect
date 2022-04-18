@@ -119,7 +119,12 @@ def setup_mqtt_app(app_net):
     global gw_uuid
 
     parts = app_net["url"].split(":")
-    client_id = "lorawan/" + app_net["eui"] + "/" + gw_uuid
+
+    if "client_id" in app_net["options"] and app_net["options"]["client_id"] != "":
+        client_id = app_net["options"]["client_id"]
+    else:
+        client_id = "lorawan/" + app_net["eui"] + "/" + gw_uuid
+
     mqtt_clients[app_net["eui"]] = mqtt.Client(client_id, False, app_net)
 
     apps[app_net["eui"]]["isMqtt"] = True

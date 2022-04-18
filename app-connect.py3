@@ -42,8 +42,11 @@ from collections import deque
 
 
 local_mqtt_sub_up = "lora/+/+/up"
+local_mqtt_sub_moved = "lora/+/moved"
 local_mqtt_sub_joined = "lora/+/joined"
 local_mqtt_down_topic = "lora/%s/down"
+local_mqtt_clear_topic = "lora/%s/clear"
+
 
 
 app_http_prefix = "/api/v1/"
@@ -62,7 +65,9 @@ app_mqtt_close_topic = "lorawan/%s/%s/close"
 app_mqtt_disconnected_topic = "lorawan/%s/%s/disconnected"
 app_mqtt_joined_topic = "lorawan/%s/%s/joined"
 app_mqtt_uplink_topic = "lorawan/%s/%s/up"
+app_mqtt_moved_topic = "lorawan/%s/%s/moved"
 app_mqtt_downlink_topic = "lorawan/%s/%s/down"
+app_mqtt_clear_topic = "lorawan/%s/%s/clear"
 
 
 
@@ -116,7 +121,12 @@ def setup_mqtt_app(app_net):
     global gw_uuid
 
     parts = app_net["url"].split(":")
-    client_id = "lorawan/" + app_net["eui"] + "/" + gw_uuid
+
+    if "client_id" in app_net["options"] and app_net["options"]["client_id"] != "":
+        client_id = app_net["options"]["client_id"]
+    else:
+        client_id = "lorawan/" + app_net["eui"] + "/" + gw_uuid
+
     mqtt_clients[app_net["eui"]] = mqtt.Client(client_id, False, app_net)
 
     apps[app_net["eui"]]["isMqtt"] = True
@@ -309,6 +319,7 @@ def setup_app(app_net):
 
 def on_mqtt_app_connect(client, userdata, flags, rc):
     global gateways
+    global gw_uuid
     if rc == 0:
         client.connected_flag=True
         client.disconnect_flag=False
@@ -316,9 +327,11 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
 
         if flags["session present"] == False:
             # resubscribe for downlinks
-            stream = os.popen('lora-query -x session list json')
-            output = stream.read()
-            dev_list = json.loads(output)
+            query = os.popen('lora-query -x session list json file /tmp/sessions.json')
+            file = open('/tmp/sessions.json',mode='r')
+            dev_list = json.loads(file.read())
+            file.close()
+            query.close()
 
             for dev in dev_list:
                 if dev["appeui"] in apps and userdata["eui"] == dev["appeui"]:
@@ -326,6 +339,27 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
                         topic = app_mqtt_downlink_topic % ( dev["appeui"], dev["deveui"] )
                         logging.info("subscribe for downlinks: %s", topic)
                         mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+                        topic = app_mqtt_clear_topic % ( dev["appeui"], dev["deveui"] )
+                        logging.info("subscribe for queue clear: %s", topic)
+                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+                        topic = app_mqtt_downlink_topic % ( gw_uuid, dev["deveui"] )
+                        logging.info("subscribe for downlinks: %s", topic)
+                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+                        topic = app_mqtt_clear_topic % ( gw_uuid, dev["deveui"] )
+                        logging.info("subscribe for queue clear: %s", topic)
+                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+                        for gw in gateways:
+                            topic = app_mqtt_downlink_topic % ( gw, dev["deveui"] )
+                            logging.info("subscribe for downlinks: %s", topic)
+                            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+                            topic = app_mqtt_clear_topic % ( gw, dev["deveui"] )
+                            logging.info("subscribe for queue clear: %s", topic)
+                            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
 def on_mqtt_app_message(client, userdata, msg):
     global local_client
@@ -341,6 +375,9 @@ def on_mqtt_app_message(client, userdata, msg):
     if event == "down":
         app_schedule_downlink(apps[appeui], deveui, msg.payload)
 
+    if event == "clear":
+        topic = local_mqtt_clear_topic % deveui
+        local_client.publish(topic, None, 1, True)
 
 def app_schedule_downlink(app, deveui, msg):
 
@@ -454,10 +491,13 @@ def on_mqtt_connect(client, userdata, flags, rc):
     logging.info("Connected with result code "+str(rc))
     client.subscribe(local_mqtt_sub_up, 1)
     client.subscribe(local_mqtt_sub_joined, 1)
+    client.subscribe(local_mqtt_sub_moved, 1)
+
 
 def on_mqtt_message(client, userdata, msg):
     global apps
     global mqtt_clients
+    global gw_uuid
 
     parts = msg.topic.split('/')
     appeui = ""
@@ -487,7 +527,7 @@ def on_mqtt_message(client, userdata, msg):
         if appeui not in apps:
             stream = os.popen('lora-query -x appnet get ' + appeui)
             output = stream.read()
-            logging.info(output)
+            stream.close()
             app_data = json.loads(output)
 
             if "status" in app_data and app_data["status"] == "fail":
@@ -499,9 +539,29 @@ def on_mqtt_message(client, userdata, msg):
 
         if apps[appeui]["isMqtt"]:
             downlink_topic = app_mqtt_downlink_topic % ( appeui, deveui )
-
             logging.info("subscribe for downlinks: %s", downlink_topic)
             mqtt_clients[appeui].subscribe(str(downlink_topic), 1)
+
+            topic = app_mqtt_clear_topic % ( appeui, deveui )
+            logging.info("subscribe for queue clear: %s", topic)
+            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+            topic = app_mqtt_downlink_topic % ( gw_uuid, deveui )
+            logging.info("subscribe for downlinks: %s", topic)
+            mqtt_clients[appeui].subscribe(str(topic), 1)
+
+            topic = app_mqtt_clear_topic % ( gw_uuid, deveui )
+            logging.info("subscribe for queue clear: %s", topic)
+            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+            for gw in gateways:
+                topic = app_mqtt_downlink_topic % ( gw, deveui )
+                logging.info("subscribe for downlinks: %s", topic)
+                mqtt_clients[appeui].subscribe(str(topic), 1)
+
+                topic = app_mqtt_clear_topic % ( gw, deveui )
+                logging.info("subscribe for queue clear: %s", topic)
+                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
             joined_topic = app_mqtt_joined_topic % (appeui, deveui)
             app_publish_msg(apps[appeui], joined_topic, msg.payload)
@@ -521,7 +581,10 @@ def on_mqtt_message(client, userdata, msg):
             elif apps[appeui]["isHttp"]:
                 app_publish_msg(apps[appeui], app_http_uplink_path % ( appeui, deveui ), msg.payload)
 
-
+    if event == "moved":
+        if appeui in apps:
+            if apps[appeui]["isMqtt"]:
+                app_publish_msg(apps[appeui], app_mqtt_moved_topic % ( appeui, deveui ), msg.payload)
 
 
 def http_uplink_thread(appeui):
@@ -673,6 +736,7 @@ gw_uuid = gw_uuid[:-1]
 
 stream = os.popen('lora-query -x config  | jsparser --jsobj --path defaultApp')
 output = stream.read()
+stream.close()
 
 try:
     default_app = json.loads(output)
@@ -684,6 +748,7 @@ except ValueError:
 
 stream = os.popen('lora-query -x gateways list json')
 output = stream.read()
+stream.close()
 
 try:
     gw_list = json.loads(output)
@@ -703,6 +768,7 @@ if "enabled" in default_app and default_app["enabled"]:
 stream = os.popen('lora-query -x appnet list json')
 output = stream.read()
 app_list = json.loads(output)
+stream.close()
 
 for app in app_list:
     apps[app["eui"]] = app
@@ -729,9 +795,12 @@ def compare_apps(app1, app2):
     return True
 
 
-stream = os.popen('lora-query -x session list json')
-output = stream.read()
-dev_list = json.loads(output)
+query = os.popen('lora-query -x session list json file /tmp/sessions.json')
+file = open('/tmp/sessions.json',mode='r')
+dev_list = json.loads(file.read())
+file.close()
+query.close()
+
 
 for dev in dev_list:
     if dev["appeui"] in apps:
@@ -739,6 +808,30 @@ for dev in dev_list:
             topic = app_mqtt_downlink_topic % ( dev["appeui"], dev["deveui"] )
             logging.info("subscribe for downlinks: %s", topic)
             mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+
+            topic = app_mqtt_clear_topic % ( dev["appeui"], dev["deveui"] )
+            logging.info("subscribe for queue clear: %s", topic)
+            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+            topic = app_mqtt_downlink_topic % ( gw_uuid, dev["deveui"] )
+            logging.info("subscribe for downlinks: %s", topic)
+            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+
+            topic = app_mqtt_clear_topic % ( gw_uuid, dev["deveui"] )
+            logging.info("subscribe for queue clear: %s", topic)
+            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+            for gw in gateways:
+                topic = app_mqtt_downlink_topic % ( gw, dev["deveui"] )
+                logging.info("subscribe for downlinks: %s", topic)
+                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
+                topic = app_mqtt_clear_topic % ( gw, dev["deveui"] )
+                logging.info("subscribe for queue clear: %s", topic)
+                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+
         if apps[dev["appeui"]]["isHttp"] and dev["appeui"] in http_clients:
             if dev["appeui"] not in http_app_devices:
                 http_app_devices[dev["appeui"]] = []
@@ -771,6 +864,7 @@ while run:
         # refresh the app list in case of changes
         stream = os.popen('lora-query -x appnet list json')
         output = stream.read()
+        stream.close()
         try:
             test_app_list = json.loads(output)
         except ValueError:
