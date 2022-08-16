@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+{% block title %}Fluid Level Demo{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+</style>
+
+<script lang="javascript">
+    function send_command() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+            document.getElementById("output").value = this.responseText;
+        }
+        xhttp.open("POST", "/device/{{eui}}", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send(JSON.stringify({ "command": document.getElementById("command").value }));
+    }
+</script>
+
+{% endblock %}
+{% block content %}
+
+<div class="row grid-responsive">
+
+    <div class="column column-75">
+        <div class="row">
+            <div class="column">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Fluid Level</h2>
+                    </div>
+                    <div class="card-block">
+                        <div class="wrapper">
+                            <canvas class="chart" id="fluid-level" height="40px" width="auto"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Battery</h2>
+                    </div>
+                    <div class="card-block">
+                        <div class="wrapper">
+                            <canvas class="chart" id="battery-level" height="40px" width="auto"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <script src="/static/js/chart.min.js"></script>
+                <script src="/static/js/chart-data.js"></script>
+                <script>
+                    window.onload = function () {
+                        var lineChartData = {
+                            labels: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+                            datasets: [
+                                {
+                                    label: "My First dataset",
+                                    fillColor: "rgba(220,220,220,0.2)",
+                                    strokeColor: "rgba(220,220,220,1)",
+                                    pointColor: "rgba(220,220,220,1)",
+                                    pointStrokeColor: "#fff",
+                                    pointHighlightFill: "#fff",
+                                    pointHighlightStroke: "rgba(220,220,220,1)",
+                                    data: [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]
+                                },
+                                {
+                                    label: "My Second dataset",
+                                    fillColor: "rgba(37, 190, 174, 0.2)",
+                                    strokeColor: "rgba(37, 190, 174, 1)",
+                                    pointColor: "rgba(37, 190, 174, 1)",
+                                    pointStrokeColor: "#fff",
+                                    pointHighlightFill: "#fff",
+                                    pointHighlightStroke: "rgba(37, 190, 174, 1)",
+                                    data: [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]
+                                }
+                            ]
+                        };
+
+                        var chart1 = document.getElementById("fluid-level").getContext("2d");
+                        window.myLineFluid = new Chart(chart1).Line(lineChartData, {
+                            responsive: true,
+                            scaleLineColor: "rgba(0,0,0,.2)",
+                            scaleGridLineColor: "rgba(0,0,0,.05)",
+                            scaleFontColor: "#c5c7cc"
+                        });
+
+                        var chart2 = document.getElementById("battery-level").getContext("2d");
+                        window.myLineBattery = new Chart(chart2).Line(lineChartData, {
+                            responsive: true,
+                            scaleLineColor: "rgba(0,0,0,.2)",
+                            scaleGridLineColor: "rgba(0,0,0,.05)",
+                            scaleFontColor: "#c5c7cc"
+                        });
+
+
+                    };
+                </script>
+            </div>
+        </div>
+    </div>
+    <div class="column column-25">
+        <div class="card">
+            <div class="card-title">
+                <h3>Device </h3>
+            </div>
+
+            <div class="card-block">
+                <form>
+                    <fieldset>
+                        <!--
+                        <label for="at_port">AT Port</label>
+                        <input type="input" name="at_port" id="at_port" />
+
+                        <label for="debug_port">Debug Port</label>
+                        <input type="input" name="debug_port" id="debug_port" />
+-->
+
+                        <label for="simulate">Simulate Device</label>
+                        <select name="simulate" id="simulate" onchange="simulate_change()">
+                            <option>Manual</option>
+                            <option>Lubricator V1</option>
+                            <option>Lubricator V2</option>
+                            <option>Monitor V1</option>
+                        </select>
+
+                        <label for="keepalive">Keep Alive Interval</label>
+                        <input type="text" name="keepalive" id="keepalive">
+
+                        <label for="sensordata">Raw Sensor Data</label>
+                        <input type="text" name="sensordata" id="sensordata">
+
+                        <label for="command">Command</label>
+                        <input type="text" name="command" id="command">
+
+                        <br>
+                        <input class="button-primary" type="button" value="Send Command" onclick="send_command()">
+
+                        <label for="output">Output</label>
+                        <textarea name="output" id="output" style="min-height:100px"></textarea>
+
+                    </fieldset>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<h5>MQTT Messages</h5>
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <div class=" card-block">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Topic</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for message in mqtt_status.messages: %}
+                            <tr>
+                                <td>{{ message.topic }}
+                                <td>{{ message.payload }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

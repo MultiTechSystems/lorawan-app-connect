@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+   {% block head %}
+   <title>{% block title %}{% endblock %}</title>
+   {% endblock %}
+
+   {% assets "scss_all" %}
+   <link rel=stylesheet type=text/css href="{{ ASSET_URL }}">
+   {% endassets %}
+
+   <!-- Google Fonts -->
+   <link href="https://fonts.googleapis.com/css?family=Montserrat:300,300i,400,400i,500,500i,600,600i,700"
+      rel="stylesheet">
+
+   <!-- Template Styles -->
+   <link rel="stylesheet" href="{{ url_for('static', filename = 'css/font-awesome.min.css') }}">
+
+   <!-- CSS Reset -->
+   <link rel="stylesheet" href="/static/css/normalize.css">
+
+   <!-- Milligram CSS minified -->
+   <link rel="stylesheet" href="/static/css/milligram.min.css">
+
+   <!-- Main Styles -->
+   <link rel="stylesheet" href="/static/css/styles.css">
+
+   <link rel="icon" type="image/x-icon" href="/static/images/favicon.ico">
+
+   <script src="https://code.jquery.com/jquery-3.6.0.min.js" integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4=" crossorigin="anonymous"></script>
+
+</head>
+
+<body>
+   <div class="navbar">
+      <div class="row">
+         <div class="column column-70">
+            <a class="site-title">LoRaWAN MQTT Application</a>
+         </div>
+         <div class="column column-30">
+            <img src="{{ url_for('static', filename = 'logo.png') }}" class="float-right" style="margin-right:20px;"> </img>
+         </div>
+      </div>
+   </div>
+   <div class="row">
+      <div id="sidebar" class="column">
+         <ul>
+            <li><a href="/">Home</a></li>
+         </ul>
+         <h5>Demos</h5>
+         <ul>
+            <li><a href="/demo_fluid_level">Fluid Level Demo</a></li>
+            <li><a href="/demo_locator">Locator Demo</a></li>
+            <li><a href="/demo_faucet">Faucet Demo</a></li>
+            <li><a href="/demo_custom">Custom Demo</a></li>
+         </ul>
+         <h5>Network Info</h5>
+         <ul>
+            <li><a href="/device_list">Devices</a></li>
+            <li><a href="/gateway_list">Gateways</a></li>
+            <li><a href="/application_list">Applications</a></li>
+            <li><a href="/downlink">Downlink</a></li>
+            <li><a href="/status">Status</a></li>
+         </ul>
+
+      </div>
+      <section id="main-content" class="column column-offset-20">
+         <div id="content">{% block content %}{% endblock %}</div>
+
+      </section>
+
+   </div>
+   <div class="credit float-right" style="position: fixed; bottom: 0; left:20px; display: block;">HTML5 Admin Template by <a href="https://www.medialoot.com">Medialoot</a></div>
+</body>
+
+</html>

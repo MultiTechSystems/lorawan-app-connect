@@ -240,12 +240,18 @@ A default application can be configured using mPower 5.3.x firmware.
   * lorawan/\<GW-EUI>/\<DEV-EUI>/moved
 
 * Subscribed
-  * lorawan/\<APP-EUI>/\<DEV-EUI>/down
-  * lorawan/\<GW-EUI>/\<DEV-EUI>/down
-  * lorawan/\<GW-UUID>/\<DEV-EUI>/down
-  * lorawan/\<APP-EUI>/\<DEV-EUI>/clear
-  * lorawan/\<GW-EUI>/\<DEV-EUI>/clear
-  * lorawan/\<GW-UUID>/\<DEV-EUI>/clear
+  * lorawan/\<APP-EUI>/\<DEV-EUI>/+
+  * lorawan/\<GW-EUI>/\<DEV-EUI>/+
+  * lorawan/\<GW-UUID>/\<DEV-EUI>/+
+
+  * Supported topics
+    * down - downlinks to schedule
+    * clear - clear downlinks for a device
+    * api_req - send API request
+    * lora_req - send request for lora-query utility
+    * log_req - send request for log file
+      * lines - number of lines to returned
+      * file - name of file to read from /var/log folder
 
 ### Test brokers
 

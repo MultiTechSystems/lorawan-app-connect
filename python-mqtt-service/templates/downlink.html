@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Queue Downlink{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+</style>
+
+
+<script lang="javascript">
+    function schedule_change() {
+
+        var e = document.getElementById("schedule");
+        var value = e.value;
+        var text = e.options[e.selectedIndex].text;
+
+        var appeui = document.getElementById("appeui");
+        var gwuuid = document.getElementById("gwuuid")
+        var gweui = document.getElementById("gweui");
+
+        appeui.parentElement.style.display = (text != "AppEUI") ? "none" : "block";
+        gweui.parentElement.style.display = (text != "GwEUI") ? "none" : "block";
+        gwuuid.parentElement.style.display = (text != "GwUUID") ? "none" : "block";
+    }
+
+    function on_load() {
+        schedule_change();
+    }
+
+</script>
+{% endblock %}
+{% block content %}
+
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <h3>Downlink</h3>
+            </div>
+            <div class="card-block">
+
+                <form action="http://skidoosh:5000/enqueue" method="POST">
+                    <fieldset>
+                        <label for="schedule">Schedule using</label> <select name="schedule" id="schedule"
+                            onchange="schedule_change()">
+                            <option>AppEUI</option>
+                            <option>GwEUI</option>
+                            <option>GwUUID</option>
+                        </select>
+
+                        <div style="display:block;">
+                            <label for="appeui">AppEUI</label> <select name="appeui" id="appeui">
+                                {% for app in applications: %}
+                                <option>{{app}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div style="display:none;">
+                            <label>GwEUI</label> <select name="gweui" id="gweui">
+                                {% for eui, uuid in gateways: %}
+                                <option>{{eui}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div style="display:none;">
+                            <label>GwUUID</label> <select name="gwuuid" id="gwuuid">
+                                {% for eui, uuid in gateways: %}
+                                <option>{{uuid}}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <label>DevEUI</label> <select name="deveui" id="deveui">
+                            {% for device in devices: %}
+                            <option>{{device}}</option>
+                            {% endfor %}
+                        </select>
+
+                        <label for="port">Port</label> <input type="text" name="port" value="1" />
+                        <label for="payload">Payload (HEX)</label>
+                        <input type="text" name="payload" title="Enter hex payload" />
+                        <br>
+                        <input class="button-primary" type="submit" value="submit" />
+
+                    </fieldset>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

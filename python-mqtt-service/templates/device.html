@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Devices{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+</style>
+
+<script lang="javascript">
+    function send_command() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function() {
+            document.getElementById("output").value = this.responseText;
+        }
+        xhttp.open("POST", "/device/{{eui}}", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send(JSON.stringify({"command":document.getElementById("command").value}));
+    }
+</script>
+
+{% endblock %}
+{% block content %}
+
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <h3>Device {{eui}}</h3>
+            </div>
+
+            <div class="card-block">
+
+                <form action="/device/{{eui}}" method="POST">
+                    <fieldset>
+<!--
+                        <label for="at_port">AT Port</label>
+                        <input type="text" name="at_port" id="at_port" />
+
+                        <label for="debug_port">Debug Port</label>
+                        <input type="text" name="debug_port" id="debug_port" />
+-->
+                        <label for="command">Command</label>
+                        <input type="text" name="command" id="command" />
+
+                        <br>
+                        <input class="button-primary" type="button" value="Send Command" onclick="send_command()"/>
+
+                        <label for="output">Output</label>
+                        <textarea name="output" id="output" style="min-height:100px"></textarea>
+
+                    </fieldset>
+                </form>
+
+
+            </div>
+            <div class="card-block">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for message in mqtt_status.messages: %}
+                        {% if eui in message.topic: %}
+                        <tr>
+                            <td>{{ message.topic }}
+                            <td>{{ message.payload }}</td>
+                        </tr>
+                        {% endif %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

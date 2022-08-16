@@ -1,0 +1,432 @@
+{% extends "base.html" %}
+{% block title %}Fluid Level Demo{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+</style>
+
+<script lang="javascript">
+    function send_command() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+            document.getElementById("output").value = this.responseText;
+        }
+        xhttp.open("POST", "/device/{{eui}}", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send(JSON.stringify({ "command": document.getElementById("command").value }));
+    }
+
+    function create_chart(element, name, value) {
+        var chartData = {
+            labels: ["Last"],
+            datasets: [
+                {
+                    fillColor: "rgba(37, 190, 174, 0.2)",
+                    strokeColor: "rgba(37, 190, 174, 1)",
+                    pointColor: "rgba(37, 190, 174, 1)",
+                    pointStrokeColor: "#fff",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "rgba(37, 190, 174, 1)",
+                    data: [value]
+                }
+            ]
+        };
+
+        var chart = document.getElementById(element).getContext("2d");
+        window[name] = new Chart(chart).Bar(chartData, {
+            responsive: true,
+            scaleLineColor: "rgba(0,0,0,.2)",
+            scaleGridLineColor: "rgba(0,0,0,.05)",
+            scaleFontColor: "#c5c7cc",
+            scaleOverride: true,
+            scaleSteps: 5,
+            scaleStepWidth: /fluid/.exec(name) ? 20 : 1,
+            scaleStartValue: 0
+        });
+    }
+
+    function create_temp_chart(element, name, value) {
+        var chartData = {
+            labels: ["Last"],
+            datasets: [
+                {
+                    fillColor: "rgba(37, 190, 174, 0.2)",
+                    strokeColor: "rgba(37, 190, 174, 1)",
+                    pointColor: "rgba(37, 190, 174, 1)",
+                    pointStrokeColor: "#fff",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "rgba(37, 190, 174, 1)",
+                    data: [value]
+                }
+            ]
+        };
+
+        var chart = document.getElementById(element).getContext("2d");
+        window[name] = new Chart(chart).Bar(chartData, {
+            responsive: true,
+            scaleLineColor: "rgba(0,0,0,.2)",
+            scaleGridLineColor: "rgba(0,0,0,.05)",
+            scaleFontColor: "#c5c7cc",
+            scaleOverride: true,
+            scaleSteps: 7,
+            scaleStepWidth: 20,
+            scaleStartValue: -40
+        });
+    }
+
+    function update_chart(name, value) {
+        console.log(window[name]);
+        console.log(window[name].datasets[0]["data"]);
+        window[name].options.animation = false;
+        window[name].addData([value],"Last");
+        window[name].removeData();
+        window[name].update("none");
+    }
+
+
+    function create_alarm_chart(element, name, data) {
+        var chartData = {
+            labels: ["6", "5", "4", "3", "2", "1", "0"],
+            datasets: [
+                {
+                    fillColor: "rgba(37, 190, 174, 0.2)",
+                    strokeColor: "rgba(37, 190, 174, 1)",
+                    pointColor: "rgba(37, 190, 174, 1)",
+                    data: [1, 0, 0, 0, 0, 0, 0]
+                }
+            ]
+        };
+
+        var chart = document.getElementById(element).getContext("2d");
+        window[name] = new Chart(chart).Bar(chartData, {
+            responsive: true,
+            scaleLineColor: "rgba(0,0,0,.2)",
+            scaleGridLineColor: "rgba(0,0,0,.05)",
+            scaleFontColor: "#c5c7cc"
+        });
+    }
+
+    function update_alarm_chart(name, value) {
+        var value_array = [
+            (value & 0x40) ? 1 : 0,
+            (value & 0x20) ? 1 : 0,
+            (value & 0x10) ? 1 : 0,
+            (value & 0x08) ? 1 : 0,
+            (value & 0x04) ? 1 : 0,
+            (value & 0x02) ? 1 : 0,
+            (value & 0x01) ? 1 : 0 ];
+        var label_array = ["6", "5", "4", "3", "2", "1", "0"];
+
+        window[name].options.animation = false;
+
+        for (var i = 0; i < value_array.length; i++) {
+            window[name].addData([value_array[i]], label_array[i]);
+        }
+
+        for (var i = 0; i < value_array.length; i++) {
+            window[name].removeData();
+        }
+        window[name].update("none");
+    }
+
+    function create_history_chart(element, name, type, data) {
+        var chartData = {
+            labels: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
+            datasets: [
+                {
+                    fillColor: "rgba(37, 190, 174, 0.2)",
+                    strokeColor: "rgba(37, 190, 174, 1)",
+                    pointColor: "rgba(37, 190, 174, 1)",
+                    pointStrokeColor: "#fff",
+                    pointHighlightFill: "#fff",
+                    pointHighlightStroke: "rgba(37, 190, 174, 1)",
+                    data: data
+                }
+            ]
+        };
+
+        var chart = document.getElementById(element).getContext("2d");
+        if (type == "line") {
+            window[name] = new Chart(chart).Line(chartData, {
+                responsive: true,
+                scaleLineColor: "rgba(0,0,0,.2)",
+                scaleGridLineColor: "rgba(0,0,0,.05)",
+                scaleFontColor: "#c5c7cc",
+                scaleOverride: true,
+                scaleSteps: 5,
+                scaleStepWidth: 20,
+                scaleStartValue: 0
+            });
+        } else if (type == "bar") {
+            window[name] = new Chart(chart).Bar(chartData, {
+                responsive: true,
+                scaleLineColor: "rgba(0,0,0,.2)",
+                scaleGridLineColor: "rgba(0,0,0,.05)",
+                scaleFontColor: "#c5c7cc",
+                scaleOverride: true,
+                scaleSteps: 5,
+                scaleStepWidth: 20,
+                scaleStartValue: 0
+            });
+        }
+    }
+
+    function add_chart_value(name, value) {
+
+    }
+
+
+
+    function update_mqtt() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+            // console.log(this.responseText);
+            $('#mqtt_table tr').remove();
+            var data = JSON.parse(this.responseText)
+
+            var first_uplink = false;
+            for (var msg in data["messages"]) {
+                var message = data["messages"][msg];
+                if (!first_uplink) {
+                    if (/.*\/up/.exec(message.topic)) {
+                        console.log("found an uplink", message.payload["data"])
+                        if (message.payload["data"].length == 6) {
+                            console.log("V1 FORMAT")
+                        } else if (message.payload["data"].length == 18) {
+                            console.log("V2 FORMAT")
+                            // VERSION | CART/SHOT | DELAY (2) | ALARM | LEFT | VOLTAGE | CURRENT | TEMP
+                            var cursor = 0;
+                            var version = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            cursor += 2;
+                            var cart_shot = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            cursor += 2;
+                            var delay = parseInt(message.payload.data.substring(cursor, cursor+4), 16);
+                            cursor += 4;
+                            var alarm = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            cursor += 2;
+                            var level = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            cursor += 2;
+                            var voltage = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            voltage = (voltage * (3.3/256) * 2).toFixed(2);
+                            cursor += 2;
+                            var current = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            current = (current * 3.3/1024).toFixed(2);
+                            cursor += 2;
+                            var temp = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
+                            cursor += 2;
+                            console.log(version, cart_shot, delay, alarm, level, voltage, current, temp);
+
+                            update_chart("fluid-level-chart", level);
+                            update_chart("voltage-level-chart", voltage);
+                            update_chart("current-level-chart", current);
+                            update_chart("temp-level-chart", temp);
+                            update_alarm_chart("alarm-level-chart", alarm);
+                        }
+                        first_uplink = true;
+                    }
+                }
+                $('#mqtt_table').append( '<tr><td>' + message.topic + '</td><td>' + JSON.stringify(message.payload, null, 1) + '</td></tr>' );
+            }
+        }
+        xhttp.open("GET", "/api/mqtt", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send();
+    }
+
+    setInterval(update_mqtt, 5000);
+
+
+    window.onload = function () {
+        var randomScalingFactor = function(){ return Math.round(Math.random()*100)};
+
+        create_history_chart("fluid-level-history", "fluid-level-history-chart", "line", [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]);
+        create_history_chart("battery-level-history", "fluid-level-history-chart", "line", [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]);
+        create_chart("fluid-level", "fluid-level-chart", 33);
+        create_chart("voltage-level", "voltage-level-chart", 53);
+        create_chart("current-level", "current-level-chart", 63);
+        create_temp_chart("temp-level", "temp-level-chart", 43);
+        create_alarm_chart("alarm-level", "alarm-level-chart", [1, 0, 0, 0, 0, 0, 0]);
+
+        update_mqtt();
+    };
+
+</script>
+
+{% endblock %}
+{% block content %}
+
+<div class="row grid-responsive">
+
+    <div class="column column-75">
+        <div class="row grid-responsive">
+            <div class="column column-20">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Fluid Level</h2>
+                    </div>
+                    <div class="card-block" style="overflow: hidden">
+                        <div class="wrapper">
+                            <canvas class="chart" id="fluid-level" height="220px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="column column-20">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Voltage</h2>
+                    </div>
+                    <div class="card-block" style="overflow: hidden" >
+                        <div class="wrapper">
+                            <canvas class="chart" id="voltage-level" height="220px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-20">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Current</h2>
+                    </div>
+                    <div class="card-block" style="overflow: hidden">
+                        <div class="wrapper">
+                            <canvas class="chart" id="current-level"  height="220px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-20">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Temperature</h2>
+                    </div>
+                    <div class="card-block" style="overflow: hidden">
+                        <div class="wrapper">
+                            <canvas class="chart" id="temp-level"  height="220px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-20">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Alarms</h2>
+                    </div>
+                    <div class="card-block">
+                        <div class="wrapper">
+                            <canvas class="chart" id="alarm-level" height="220px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="column">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Fluid Level History</h2>
+                    </div>
+                    <div class="card-block">
+                        <div class="canvas-wrapper">
+                            <canvas class="chart" id="fluid-level-history" height="40px" width="auto"></canvas>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Battery History</h2>
+                    </div>
+                    <div class="card-block">
+                        <div class="canvas-wrapper">
+                            <canvas class="chart" id="battery-level-history" height="40px" width="auto"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <script src="/static/js/chart.min.js"></script>
+                <script src="/static/js/chart-data.js"></script>
+
+            </div>
+        </div>
+    </div>
+    <div class="column column-25">
+        <div class="card">
+            <div class="card-title">
+                <h3>Device </h3>
+            </div>
+
+            <div class="card-block">
+                <form>
+                    <fieldset>
+                        <!--
+                        <label for="at_port">AT Port</label>
+                        <input type="input" name="at_port" id="at_port" />
+
+                        <label for="debug_port">Debug Port</label>
+                        <input type="input" name="debug_port" id="debug_port" />
+-->
+
+                        <label for="simulate">Simulate Device</label>
+                        <select name="simulate" id="simulate" onchange="simulate_change()">
+                            <option>Manual</option>
+                            <option>Lubricator V1</option>
+                            <option>Lubricator V2</option>
+                            <option>Monitor V1</option>
+                        </select>
+
+                        <label for="keepalive">Keep Alive Interval</label>
+                        <input type="text" name="keepalive" id="keepalive">
+
+                        <label for="sensordata">Raw Sensor Data</label>
+                        <input type="text" name="sensordata" id="sensordata">
+
+                        <label for="command">Command</label>
+                        <input type="text" name="command" id="command">
+
+                        <br>
+                        <input class="button-primary" type="button" value="Send Command" onclick="send_command()">
+
+                        <label for="output">Output</label>
+                        <textarea name="output" id="output" style="min-height:100px"></textarea>
+
+                    </fieldset>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<h5>MQTT Messages</h5>
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <div class=" card-block">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Topic</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mqtt_table">
+                            {% for message in mqtt_status.messages: %}
+                            <tr>
+                                <td>{{ message.topic }}
+                                <td>{{ message.payload }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

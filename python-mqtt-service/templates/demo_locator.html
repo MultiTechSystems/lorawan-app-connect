@@ -1,0 +1,166 @@
+{% extends "base.html" %}
+{% block title %}Locator Demo{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+
+    .outsideWrapper {
+        width: 100%;
+        height: 100%;
+    }
+
+    .insideWrapper {
+        width: 100%;
+        height: 100%;
+        position: relative;
+    }
+
+    .coveredImage {
+        width: 100%;
+        height: 100%;
+    }
+
+    .coveringCanvas {
+        width: 100%;
+        height: 100%;
+        position: absolute;
+        top: 0px;
+        left: 0px;
+
+        color: #24ff00;
+    }
+</style>
+
+<script lang="javascript">
+    function send_command() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+            document.getElementById("output").value = this.responseText;
+        }
+        xhttp.open("POST", "/device/{{eui}}", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send(JSON.stringify({ "command": document.getElementById("command").value }));
+    }
+
+;
+    function drawBoard(){
+        var radius = 2;
+        var centerX = 20 + Math.floor(Math.random() * 250);
+        var centerY = 20 + Math.floor(Math.random() * 110);
+
+        console.log("update position", centerX, centerY);
+        var canvas = document.getElementById("canvas");
+        var context = canvas.getContext("2d")
+        context.beginPath();
+        context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+        context.fillStyle = '#30FF00';
+        context.fill();
+        context.lineWidth = 1;
+        context.strokeStyle = 'black';
+        context.stroke();
+    }
+
+
+</script>
+
+{% endblock %}
+{% block content %}
+
+<div class="row grid-responsive">
+
+    <div class="column column-75">
+        <div class="row">
+            <div class="column">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>Warehouse One</h2>
+                    </div>
+                    <div class="card-block">
+                        <div class="outsideWrapper">
+                            <div class="insideWrapper">
+                                <img src="/static/images/warehouse.jpeg" class="coveredImage" />
+                                <canvas id="canvas" class="coveringCanvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="column column-25">
+        <div class="card">
+            <div class="card-title">
+                <h3>Device </h3>
+            </div>
+
+            <div class="card-block">
+                <form>
+                    <fieldset>
+                        <!--
+                        <label for="at_port">AT Port</label>
+                        <input type="input" name="at_port" id="at_port" />
+
+                        <label for="debug_port">Debug Port</label>
+                        <input type="input" name="debug_port" id="debug_port" />
+-->
+
+                        <label for="simulate">Simulate Device</label>
+                        <select name="simulate" id="simulate" onchange="simulate_change()">
+                            <option>Manual</option>
+                            <option>Locator Tag V1</option>
+                        </select>
+
+                        <label for="keepalive">Keep Alive Interval</label>
+                        <input type="text" name="keepalive" id="keepalive">
+
+                        <label for="sensordata">Raw Sensor Data</label>
+                        <input type="text" name="sensordata" id="sensordata">
+
+                        <label for="command">Command</label>
+                        <input type="text" name="command" id="command">
+
+                        <br>
+                        <input class="button-primary" type="button" value="Send Command" onclick="send_command()">
+                        <input class="button-primary" type="button" value="Update Position" onclick="drawBoard()">
+
+                        <label for="output">Output</label>
+                        <textarea name="output" id="output" style="min-height:100px"></textarea>
+
+                    </fieldset>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+<h5>MQTT Messages</h5>
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <div class=" card-block">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Topic</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for message in mqtt_status.messages: %}
+                            <tr>
+                                <td>{{ message.topic }}
+                                <td>{{ message.payload }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

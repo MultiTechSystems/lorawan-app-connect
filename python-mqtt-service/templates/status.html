@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Queue Downlink{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+</style>
+
+
+<script lang="javascript">
+    function schedule_change() {
+
+        var e = document.getElementById("schedule");
+        var value = e.value;
+        var text = e.options[e.selectedIndex].text;
+
+        var appeui = document.getElementById("appeui");
+        var gwuuid = document.getElementById("gwuuid")
+        var gweui = document.getElementById("gweui");
+
+        appeui.parentElement.style.display = (text != "AppEUI") ? "none" : "block";
+        gweui.parentElement.style.display = (text != "GwEUI") ? "none" : "block";
+        gwuuid.parentElement.style.display = (text != "GwUUID") ? "none" : "block";
+    }
+
+    function on_load() {
+        schedule_change();
+    }
+
+</script>
+{% endblock %}
+{% block content %}
+
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <h3>MQTT Connected: {{ mqtt_status.connected }}</h3>
+            </div>
+            <div class="card-block">
+
+        <table>
+            <thead>
+                <tr><th>Topic</th><th>Message</th></tr>
+            </thead>
+            <tbody>
+            {% for message in mqtt_status.messages: %}
+                <tr>
+                    <td>{{ message.topic }}
+                    <td>{{ message.payload }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+	</ul>
+    <script>setTimeout(function(){ window.location = '/status'; }, 5000);</script>
+
+</div>
+</div>
+</div>
+</div>
+
+{% endblock %}
