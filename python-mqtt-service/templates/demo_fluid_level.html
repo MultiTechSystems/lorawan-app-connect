@@ -217,6 +217,28 @@
         });
     }
 
+    function update_status_chart(name, value) {
+        var value_array = [
+            (value & 0x0F),
+            (value & 0xF0) >> 4,
+            (value & 0x0F00) >> 8 ];
+        var label_array = ["Pump1", "Pump2", "Pump3"];
+
+        window[name].options.animation = false;
+
+        for (var i = 0; i < value_array.length; i++) {
+            window[name].data.labels.pop();
+            window[name].data.datasets[0].data.pop();
+        }
+
+        for (var i = 0; i < value_array.length; i++) {
+            window[name].data.labels.push(label_array[i]);
+            window[name].data.datasets[0].data.push(value_array[i]);
+        }
+
+        window[name].update("none");
+    }
+
     function create_history_chart(element, name, type, data) {
         var chartData = {
             labels: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
@@ -316,6 +338,7 @@
 
                             update_chart("delay-level-chart", delay);
                             update_chart("temp-level-chart", temp);
+                            update_status_chart("status-level-chart", status);
 
                         } else if (message.payload["data"].length == 18) {
                             console.log("V2 FORMAT")
