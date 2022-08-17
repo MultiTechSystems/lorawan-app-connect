@@ -8,6 +8,10 @@
     }
 </style>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+<script src="/static/js/chart-data.js"></script>
+
 <script lang="javascript">
     function send_command() {
         console.log("sending http request")
@@ -25,88 +29,134 @@
             labels: ["Last"],
             datasets: [
                 {
-                    fillColor: "rgba(37, 190, 174, 0.2)",
-                    strokeColor: "rgba(37, 190, 174, 1)",
-                    pointColor: "rgba(37, 190, 174, 1)",
-                    pointStrokeColor: "#fff",
-                    pointHighlightFill: "#fff",
-                    pointHighlightStroke: "rgba(37, 190, 174, 1)",
+                    backgroundColor: "rgba(37, 190, 174, 0.2)",
+                    borderColor: "rgba(37, 190, 174, 1)",
+                    borderWidth: 1,
                     data: [value]
                 }
             ]
         };
 
         var chart = document.getElementById(element).getContext("2d");
-        window[name] = new Chart(chart).Bar(chartData, {
-            responsive: true,
-            scaleLineColor: "rgba(0,0,0,.2)",
-            scaleGridLineColor: "rgba(0,0,0,.05)",
-            scaleFontColor: "#c5c7cc",
-            scaleOverride: true,
-            scaleSteps: 5,
-            scaleStepWidth: /fluid/.exec(name) ? 20 : 1,
-            scaleStartValue: 0
+        window[name] = new Chart(chart, {
+            type: "bar",
+            data: chartData,
+            plugins: [ChartDataLabels],
+            options: {
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    datalabels: {
+                        backgroundColor: function (context) {
+                            return "rgba(37, 190, 174, 0.8)";
+                        },
+                        borderRadius: 4,
+                        color: "white",
+                        font: {
+                            weight: "bold",
+                            size: 20,
+                        },
+                        padding: 6,
+                    },
+                },
+                responsive: true,
+                scaleLineColor: "rgba(0,0,0,.2)",
+                scaleGridLineColor: "rgba(0,0,0,.05)",
+                scaleFontColor: "#c5c7cc",
+                scaleOverride: true,
+                scaleSteps: 5,
+                scaleStepWidth: /fluid/.exec(name) ? 20 : /delay/.exec(name) ? 15 : 1,
+                scaleStartValue: 0
+            }
         });
     }
 
     function create_temp_chart(element, name, value) {
         var chartData = {
-            labels: ["Last"],
+            labels: [""],
             datasets: [
                 {
-                    fillColor: "rgba(37, 190, 174, 0.2)",
-                    strokeColor: "rgba(37, 190, 174, 1)",
-                    pointColor: "rgba(37, 190, 174, 1)",
-                    pointStrokeColor: "#fff",
-                    pointHighlightFill: "#fff",
-                    pointHighlightStroke: "rgba(37, 190, 174, 1)",
+                    backgroundColor: "rgba(37, 190, 174, 0.2)",
+                    borderColor: "rgba(37, 190, 174, 1)",
+                    borderWidth: 1,
                     data: [value]
                 }
             ]
         };
 
         var chart = document.getElementById(element).getContext("2d");
-        window[name] = new Chart(chart).Bar(chartData, {
-            responsive: true,
-            scaleLineColor: "rgba(0,0,0,.2)",
-            scaleGridLineColor: "rgba(0,0,0,.05)",
-            scaleFontColor: "#c5c7cc",
-            scaleOverride: true,
-            scaleSteps: 7,
-            scaleStepWidth: 20,
-            scaleStartValue: -40
+        window[name] = new Chart(chart, {
+            type: "bar",
+            data: chartData,
+            plugins: [ChartDataLabels],
+            options: {
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+                    datalabels: {
+                        backgroundColor: function (context) {
+                            return "rgba(37, 190, 174, 0.8)";
+                        },
+                        borderRadius: 4,
+                        color: "white",
+                        font: {
+                            weight: "bold",
+                            size: 20,
+                        },
+                        padding: 6,
+                    },
+                },
+                responsive: true,
+                scaleLineColor: "rgba(0,0,0,.2)",
+                scaleGridLineColor: "rgba(0,0,0,.05)",
+                scaleFontColor: "#c5c7cc",
+                scaleOverride: true,
+                scaleSteps: 7,
+                scaleStepWidth: 20,
+                scaleStartValue: -40
+            }
         });
     }
 
     function update_chart(name, value) {
-        console.log(window[name]);
-        console.log(window[name].datasets[0]["data"]);
-        window[name].options.animation = false;
-        window[name].addData([value],"Last");
-        window[name].removeData();
+        window[name].data.labels.pop();
+        window[name].data.datasets[0].data.pop();
+        window[name].data.labels.push("");
+        window[name].data.datasets[0].data.push(value);
         window[name].update("none");
     }
 
 
     function create_alarm_chart(element, name, data) {
         var chartData = {
-            labels: ["6", "5", "4", "3", "2", "1", "0"],
+            labels: ["Demo", "Intr", "Pres", "Pres", "Batt", "Refl", "Disp"],
             datasets: [
                 {
-                    fillColor: "rgba(37, 190, 174, 0.2)",
-                    strokeColor: "rgba(37, 190, 174, 1)",
-                    pointColor: "rgba(37, 190, 174, 1)",
+                    backgroundColor: "rgba(37, 190, 174, 0.2)",
+                    borderColor: "rgba(37, 190, 174, 1)",
+                    borderWidth: 1,
                     data: [1, 0, 0, 0, 0, 0, 0]
                 }
             ]
         };
 
         var chart = document.getElementById(element).getContext("2d");
-        window[name] = new Chart(chart).Bar(chartData, {
-            responsive: true,
-            scaleLineColor: "rgba(0,0,0,.2)",
-            scaleGridLineColor: "rgba(0,0,0,.05)",
-            scaleFontColor: "#c5c7cc"
+        window[name] = new Chart(chart, {
+            type: "bar",
+            data: chartData,
+            options: {
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                responsive: true,
+                scaleLineColor: "rgba(0,0,0,.2)",
+                scaleGridLineColor: "rgba(0,0,0,.05)",
+                scaleFontColor: "#c5c7cc"
+            }
         });
     }
 
@@ -119,18 +169,52 @@
             (value & 0x04) ? 1 : 0,
             (value & 0x02) ? 1 : 0,
             (value & 0x01) ? 1 : 0 ];
-        var label_array = ["6", "5", "4", "3", "2", "1", "0"];
+        var label_array = ["Demo", "Intr", "Pres", "Pres", "Batt", "Refl", "Disp"]; //["6", "5", "4", "3", "2", "1", "0"];
 
         window[name].options.animation = false;
 
         for (var i = 0; i < value_array.length; i++) {
-            window[name].addData([value_array[i]], label_array[i]);
+            window[name].data.labels.pop();
+            window[name].data.datasets[0].data.pop();
         }
 
         for (var i = 0; i < value_array.length; i++) {
-            window[name].removeData();
+            window[name].data.labels.push(label_array[i]);
+            window[name].data.datasets[0].data.push(value_array[i]);
         }
+
         window[name].update("none");
+    }
+
+    function create_status_chart(element, name, data) {
+        var chartData = {
+            labels: ["Pump1", "Pump2", "Pump3"],
+            datasets: [
+                {
+                    backgroundColor: "rgba(37, 190, 174, 0.2)",
+                    borderColor: "rgba(37, 190, 174, 1)",
+                    borderWidth: 1,
+                    data: [1,2,3]
+                }
+            ]
+        };
+
+        var chart = document.getElementById(element).getContext("2d");
+        window[name] = new Chart(chart, {
+            type: "bar",
+            data: chartData,
+            options: {
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                responsive: true,
+                scaleLineColor: "rgba(0,0,0,.2)",
+                scaleGridLineColor: "rgba(0,0,0,.05)",
+                scaleFontColor: "#c5c7cc"
+            }
+        });
     }
 
     function create_history_chart(element, name, type, data) {
@@ -138,12 +222,12 @@
             labels: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"],
             datasets: [
                 {
-                    fillColor: "rgba(37, 190, 174, 0.2)",
-                    strokeColor: "rgba(37, 190, 174, 1)",
-                    pointColor: "rgba(37, 190, 174, 1)",
-                    pointStrokeColor: "#fff",
-                    pointHighlightFill: "#fff",
-                    pointHighlightStroke: "rgba(37, 190, 174, 1)",
+                    backgroundColor: "rgba(37, 190, 174, 0.2)",
+                    borderColor: "rgba(37, 190, 174, 1)",
+                    borderWidth: 1,
+                    fill: true,
+                    lineTension: 0.4,
+                    radius: 4,
                     data: data
                 }
             ]
@@ -151,15 +235,24 @@
 
         var chart = document.getElementById(element).getContext("2d");
         if (type == "line") {
-            window[name] = new Chart(chart).Line(chartData, {
-                responsive: true,
-                scaleLineColor: "rgba(0,0,0,.2)",
-                scaleGridLineColor: "rgba(0,0,0,.05)",
-                scaleFontColor: "#c5c7cc",
-                scaleOverride: true,
-                scaleSteps: 5,
-                scaleStepWidth: 20,
-                scaleStartValue: 0
+            window[name] = new Chart(chart, {
+                type: "line",
+                data: chartData,
+                options: {
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    },
+                    responsive: true,
+                    scaleLineColor: "rgba(0,0,0,.2)",
+                    scaleGridLineColor: "rgba(0,0,0,.05)",
+                    scaleFontColor: "#c5c7cc",
+                    scaleOverride: true,
+                    scaleSteps: 5,
+                    scaleStepWidth: 20,
+                    scaleStartValue: 0
+                }
             });
         } else if (type == "bar") {
             window[name] = new Chart(chart).Bar(chartData, {
@@ -195,17 +288,53 @@
                 if (!first_uplink) {
                     if (/.*\/up/.exec(message.topic)) {
                         console.log("found an uplink", message.payload["data"])
+                        $("#deveui").text("EUI: " + message.topic.split("/")[2]);
+
                         if (message.payload["data"].length == 6) {
-                            console.log("V1 FORMAT")
+                            console.log("V1 FORMAT");
+                        } else if (message.payload["data"].length == 12) {
+                            console.log("LMK FORMAT");
+
+                            $(".lubricatorv2").hide();
+                            $(".lmkv1").show();
+
+                            $("#cart").text("NA");
+                            $("#shot").text("NA");
+                            $("#type").text("LMK V1");
+
+                            var cursor = 0;
+                            var version = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            cursor += 2;
+                            var status = parseInt(message.payload.data.substring(cursor, cursor+4), 16);
+                            cursor += 4;
+                            var delay = parseInt(message.payload.data.substring(cursor, cursor+4), 16);
+                            delay = (delay / 60.0).toFixed(2);
+                            cursor += 4;
+                            var temp = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
+                            cursor += 2;
+
+                            update_chart("delay-level-chart", delay);
+                            update_chart("temp-level-chart", temp);
+
                         } else if (message.payload["data"].length == 18) {
                             console.log("V2 FORMAT")
+
+                            $(".lubricatorv2").show();
+                            $(".lmkv1").hide();
+
                             // VERSION | CART/SHOT | DELAY (2) | ALARM | LEFT | VOLTAGE | CURRENT | TEMP
                             var cursor = 0;
                             var version = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
                             cursor += 2;
                             var cart_shot = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
                             cursor += 2;
+
+                            $("#cart").text("Size: " + ((cart_shot & 0x60) ? "500ml" : (cart_shot & 0x40) ? "250ml" : (cart_shot & 0x20) ? "125ml" : "60ml"));
+                            $("#shot").text("Shot: " + (cart_shot & 0x0F));
+                            $("#type").text("Lubricator V2");
                             var delay = parseInt(message.payload.data.substring(cursor, cursor+4), 16);
+                            delay = (delay / 60.0).toFixed(2);
                             cursor += 4;
                             var alarm = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
                             cursor += 2;
@@ -223,6 +352,7 @@
                             console.log(version, cart_shot, delay, alarm, level, voltage, current, temp);
 
                             update_chart("fluid-level-chart", level);
+                            update_chart("delay-level-chart", delay);
                             update_chart("voltage-level-chart", voltage);
                             update_chart("current-level-chart", current);
                             update_chart("temp-level-chart", temp);
@@ -248,10 +378,12 @@
         create_history_chart("fluid-level-history", "fluid-level-history-chart", "line", [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]);
         create_history_chart("battery-level-history", "fluid-level-history-chart", "line", [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]);
         create_chart("fluid-level", "fluid-level-chart", 33);
+        create_chart("delay-level", "delay-level-chart", 53);
         create_chart("voltage-level", "voltage-level-chart", 53);
         create_chart("current-level", "current-level-chart", 63);
         create_temp_chart("temp-level", "temp-level-chart", 43);
         create_alarm_chart("alarm-level", "alarm-level-chart", [1, 0, 0, 0, 0, 0, 0]);
+        create_status_chart("status-level", "status-level-chart", [1,2,3]);
 
         update_mqtt();
     };
@@ -265,63 +397,120 @@
 
     <div class="column column-75">
         <div class="row grid-responsive">
-            <div class="column column-20">
+            <div class="column column-50">
                 <div class="card">
                     <div class="card-title">
-                        <h2>Fluid Level</h2>
+                        <h4 id="deveui"></h4>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-50">
+                <div class="card">
+                    <div class="card-title">
+                        <h4 id="type"></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row grid-responsive lubricatorv2">
+            <div class="column column-50">
+                <div class="card">
+                    <div class="card-title">
+                        <h4 id="cart"></h4>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-50 lubricatorv2">
+                <div class="card">
+                    <div class="card-title">
+                        <h4 id="shot"></h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row lubricatorv2">
+            <div class="column column-33">
+                <div class="card">
+                    <div class="card-title">
+                        <h4>Fluid Level (%)</h4>
                     </div>
                     <div class="card-block" style="overflow: hidden">
                         <div class="wrapper">
-                            <canvas class="chart" id="fluid-level" height="220px"></canvas>
+                            <canvas class="chart" id="fluid-level" height="140px"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div class="column column-20">
+            <div class="column column-34">
                 <div class="card">
                     <div class="card-title">
-                        <h2>Voltage</h2>
+                        <h4>Voltage (V)</h4>
                     </div>
                     <div class="card-block" style="overflow: hidden" >
                         <div class="wrapper">
-                            <canvas class="chart" id="voltage-level" height="220px"></canvas>
+                            <canvas class="chart" id="voltage-level" height="120px"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="column column-20">
+            <div class="column column-33">
                 <div class="card">
                     <div class="card-title">
-                        <h2>Current</h2>
+                        <h4>Current (mA)</h4>
                     </div>
                     <div class="card-block" style="overflow: hidden">
                         <div class="wrapper">
-                            <canvas class="chart" id="current-level"  height="220px"></canvas>
+                            <canvas class="chart" id="current-level"  height="120px"></canvas>
                         </div>
                     </div>
                 </div>
             </div>
-            <div class="column column-20">
+        </div>
+        <div class="row grid-responsive">
+            <div class="column column-33 lubricatorv2">
                 <div class="card">
                     <div class="card-title">
-                        <h2>Temperature</h2>
-                    </div>
-                    <div class="card-block" style="overflow: hidden">
-                        <div class="wrapper">
-                            <canvas class="chart" id="temp-level"  height="220px"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="column column-20">
-                <div class="card">
-                    <div class="card-title">
-                        <h2>Alarms</h2>
+                        <h4>Alarms</h4>
                     </div>
                     <div class="card-block">
                         <div class="wrapper">
-                            <canvas class="chart" id="alarm-level" height="220px"></canvas>
+                            <canvas class="chart" id="alarm-level" height="120px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-33 lmkv1">
+                <div class="card">
+                    <div class="card-title">
+                        <h4>Status</h4>
+                    </div>
+                    <div class="card-block">
+                        <div class="wrapper">
+                            <canvas class="chart" id="status-level" height="120px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-34">
+                <div class="card">
+                    <div class="card-title">
+                        <h4>Delay (Hours)</h4>
+                    </div>
+                    <div class="card-block">
+                        <div class="wrapper">
+                            <canvas class="chart" id="delay-level" height="120px"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-33">
+                <div class="card">
+                    <div class="card-title">
+                        <h4>Temperature (&deg;C)</h4>
+                    </div>
+                    <div class="card-block" style="overflow: hidden">
+                        <div class="wrapper">
+                            <canvas class="chart" id="temp-level"  height="120px"></canvas>
                         </div>
                     </div>
                 </div>
@@ -350,8 +539,7 @@
                     </div>
                 </div>
 
-                <script src="/static/js/chart.min.js"></script>
-                <script src="/static/js/chart-data.js"></script>
+
 
             </div>
         </div>
