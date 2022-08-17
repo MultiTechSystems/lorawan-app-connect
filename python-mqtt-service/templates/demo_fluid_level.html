@@ -13,15 +13,66 @@
 <script src="/static/js/chart-data.js"></script>
 
 <script lang="javascript">
+    var deveui = "";
+
     function send_command() {
         console.log("sending http request")
         const xhttp = new XMLHttpRequest();
         xhttp.onload = function () {
             document.getElementById("output").value = this.responseText;
         }
-        xhttp.open("POST", "/device/{{eui}}", true);
+        xhttp.open("POST", "/device/" + deveui, true);
         xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
         xhttp.send(JSON.stringify({ "command": document.getElementById("command").value }));
+    }
+
+    function simulate_change() {
+        if (/lubricator v2/i.exec($("#simulate").val())) {
+            $(".input-lubricatorv2").show();
+            $(".input-lmkv1").hide();
+        } else if (/LMK V1/i.exec($("#simulate").val())) {
+            $(".input-lubricatorv2").hide();
+            $(".input-lmkv1").show();
+        }
+    }
+
+    function build_command() {
+        if (/lubricator v2/i.exec($("#simulate").val())) {
+            var cart_size = parseInt($("#input-shot-size").val());
+            cart_size |= parseInt($("#input-cart-size").val()) << 5;
+
+            var delay = parseInt($("#input-delay").val());
+            var temp = parseInt($("#input-temp").val());
+            var alarm = parseInt($("#input-alarm").val(), 16);
+            var level = parseInt($("#input-level").val());
+            var voltage = parseFloat($("#input-voltage").val());
+            var current = parseFloat($("#input-current").val());
+
+            voltage = Math.round(voltage * (256 / 3.3) / 2) & 0xFF;
+            current = Math.round(current/1000 / (3.3/1024)) & 0xFF;
+            temp = temp < 0 ? (0x80 | Math.abs(temp)) : temp;
+
+            console.log("cart size:", cart_size.toString(16).padStart(2, "0"));
+            console.log("delay alarm:", delay.toString(16).padStart(4, "0") + " " + alarm.toString(16).padStart(2, "0"));
+            console.log("level voltage:", level.toString(16).padStart(2, "0") + " " + voltage.toString(16).padStart(2, "0"));
+            console.log("current temp:", current.toString(16).padStart(2, "0") + " " + temp.toString(16).padStart(2, "0"));
+
+            $("#command").val("AT+SENDB=00" + cart_size.toString(16).padStart(2, "0")
+                + delay.toString(16).padStart(4, "0") + alarm.toString(16).padStart(2, "0")
+                + level.toString(16).padStart(2, "0") + voltage.toString(16).padStart(2, "0")
+                + current.toString(16).padStart(2, "0") + temp.toString(16).padStart(2, "0"))
+
+        } else if (/LMK V1/i.exec($("#simulate").val())) {
+            var status = parseInt($("#input-pump1").val(),16);
+            status |= parseInt($("#input-pump2").val(),16) << 4;
+            status |= parseInt($("#input-pump3").val(),16) << 8;
+            var delay = parseInt($("#input-delay").val());
+            var temp = parseInt($("#input-temp").val());
+
+            temp = temp < 0 ? (0x80 | Math.abs(temp)) : temp;
+
+            $("#command").val("AT+SENDB=00" + status.toString(16).padStart(4, "0") + delay.toString(16).padStart(4, "0") + temp.toString(16).padStart(2, "0"))
+        }
     }
 
     function create_chart(element, name, value) {
@@ -146,16 +197,42 @@
         window[name] = new Chart(chart, {
             type: "bar",
             data: chartData,
+            plugins: [ChartDataLabels],
             options: {
                 plugins: {
                     legend: {
                         display: false
-                    }
+                    },
+                    datalabels: {
+                        backgroundColor: function (context) {
+                            return "rgba(37, 190, 174, 0.8)";
+                        },
+                        borderRadius: 4,
+                        color: "white",
+                        font: {
+                            weight: "bold",
+                            size: 20,
+                        },
+                        align: "top",
+                        padding: 6,
+                    },
                 },
                 responsive: true,
                 scaleLineColor: "rgba(0,0,0,.2)",
                 scaleGridLineColor: "rgba(0,0,0,.05)",
-                scaleFontColor: "#c5c7cc"
+                scaleFontColor: "#c5c7cc",
+                scales: {
+                    y: {
+                        ticks: {
+                            min: 0,
+                            max: 1,
+                            stepSize: 1,
+                            callback: function(value, index, ticks) {
+                                return value ? "ON" : "OFF";
+                            }
+                        }
+                    }
+                },
             }
         });
     }
@@ -168,7 +245,7 @@
             (value & 0x08) ? 1 : 0,
             (value & 0x04) ? 1 : 0,
             (value & 0x02) ? 1 : 0,
-            (value & 0x01) ? 1 : 0 ];
+            (value & 0x01) ? 1 : 0];
         var label_array = ["Demo", "Intr", "Pres", "Pres", "Batt", "Refl", "Disp"]; //["6", "5", "4", "3", "2", "1", "0"];
 
         window[name].options.animation = false;
@@ -194,7 +271,7 @@
                     backgroundColor: "rgba(37, 190, 174, 0.2)",
                     borderColor: "rgba(37, 190, 174, 1)",
                     borderWidth: 1,
-                    data: [1,2,3]
+                    data: [1, 2, 3]
                 }
             ]
         };
@@ -203,10 +280,36 @@
         window[name] = new Chart(chart, {
             type: "bar",
             data: chartData,
+            plugins: [ChartDataLabels],
             options: {
                 plugins: {
                     legend: {
                         display: false
+                    },
+                    datalabels: {
+                        backgroundColor: function (context) {
+                            return "rgba(37, 190, 174, 0.8)";
+                        },
+                        borderRadius: 4,
+                        color: "white",
+                        font: {
+                            weight: "bold",
+                            size: 20,
+                        },
+                        align: "top",
+                        formatter: function(val) {
+                            return val.toString(2).padStart(4,"0")
+                        },
+                        padding: 1,
+                    },
+                },
+                scales: {
+                    y: {
+                        ticks: {
+                            callback: function(value, index, ticks) {
+                                return "0x" + value.toString(16).toUpperCase();
+                            }
+                        }
                     }
                 },
                 responsive: true,
@@ -221,7 +324,7 @@
         var value_array = [
             (value & 0x0F),
             (value & 0xF0) >> 4,
-            (value & 0x0F00) >> 8 ];
+            (value & 0x0F00) >> 8];
         var label_array = ["Pump1", "Pump2", "Pump3"];
 
         window[name].options.animation = false;
@@ -310,7 +413,9 @@
                 if (!first_uplink) {
                     if (/.*\/up/.exec(message.topic)) {
                         console.log("found an uplink", message.payload["data"])
-                        $("#deveui").text("EUI: " + message.topic.split("/")[2]);
+                        deveui = message.topic.split("/")[2];
+                        $("#deveui").text("EUI: " + deveui);
+                        $("#snr_rssi").text("SNR/RSSI: " + message.payload["lsnr"].toString() + " dB / " + message.payload["rssi"].toString() + " dBm");
 
                         if (message.payload["data"].length == 6) {
                             console.log("V1 FORMAT");
@@ -325,14 +430,14 @@
                             $("#type").text("LMK V1");
 
                             var cursor = 0;
-                            var version = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            var version = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             cursor += 2;
-                            var status = parseInt(message.payload.data.substring(cursor, cursor+4), 16);
+                            var status = parseInt(message.payload.data.substring(cursor, cursor + 4), 16);
                             cursor += 4;
-                            var delay = parseInt(message.payload.data.substring(cursor, cursor+4), 16);
+                            var delay = parseInt(message.payload.data.substring(cursor, cursor + 4), 16);
                             delay = (delay / 60.0).toFixed(2);
                             cursor += 4;
-                            var temp = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            var temp = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
                             cursor += 2;
 
@@ -348,28 +453,28 @@
 
                             // VERSION | CART/SHOT | DELAY (2) | ALARM | LEFT | VOLTAGE | CURRENT | TEMP
                             var cursor = 0;
-                            var version = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            var version = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             cursor += 2;
-                            var cart_shot = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            var cart_shot = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             cursor += 2;
 
-                            $("#cart").text("Size: " + ((cart_shot & 0x60) ? "500ml" : (cart_shot & 0x40) ? "250ml" : (cart_shot & 0x20) ? "125ml" : "60ml"));
-                            $("#shot").text("Shot: " + (cart_shot & 0x0F));
+                            $("#cart").text("Cart Size: " + ((cart_shot & 0x60) == 0x60 ? "500ml" : (cart_shot & 0x40) == 0x40 ? "250ml" : (cart_shot & 0x20) == 0x20 ? "125ml" : "60ml"));
+                            $("#shot").text("Shot Size: " + (cart_shot & 0x0F));
                             $("#type").text("Lubricator V2");
-                            var delay = parseInt(message.payload.data.substring(cursor, cursor+4), 16);
+                            var delay = parseInt(message.payload.data.substring(cursor, cursor + 4), 16);
                             delay = (delay / 60.0).toFixed(2);
                             cursor += 4;
-                            var alarm = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            var alarm = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             cursor += 2;
-                            var level = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            var level = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             cursor += 2;
-                            var voltage = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
-                            voltage = (voltage * (3.3/256) * 2).toFixed(2);
+                            var voltage = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
+                            voltage = (voltage * (3.3 / 256) * 2).toFixed(2);
                             cursor += 2;
-                            var current = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
-                            current = (current * 3.3/1024).toFixed(2);
+                            var current = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
+                            current = (current * 3.3/1024 * 1000).toFixed(2);
                             cursor += 2;
-                            var temp = parseInt(message.payload.data.substring(cursor, cursor+2), 16);
+                            var temp = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
                             cursor += 2;
                             console.log(version, cart_shot, delay, alarm, level, voltage, current, temp);
@@ -384,7 +489,7 @@
                         first_uplink = true;
                     }
                 }
-                $('#mqtt_table').append( '<tr><td>' + message.topic + '</td><td>' + JSON.stringify(message.payload, null, 1) + '</td></tr>' );
+                $('#mqtt_table').append('<tr><td>' + message.topic + '</td><td>' + JSON.stringify(message.payload, null, 1) + '</td></tr>');
             }
         }
         xhttp.open("GET", "/api/mqtt", true);
@@ -396,7 +501,7 @@
 
 
     window.onload = function () {
-        var randomScalingFactor = function(){ return Math.round(Math.random()*100)};
+        var randomScalingFactor = function () { return Math.round(Math.random() * 100) };
 
         create_history_chart("fluid-level-history", "fluid-level-history-chart", "line", [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]);
         create_history_chart("battery-level-history", "fluid-level-history-chart", "line", [randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor(), randomScalingFactor()]);
@@ -406,9 +511,12 @@
         create_chart("current-level", "current-level-chart", 63);
         create_temp_chart("temp-level", "temp-level-chart", 43);
         create_alarm_chart("alarm-level", "alarm-level-chart", [1, 0, 0, 0, 0, 0, 0]);
-        create_status_chart("status-level", "status-level-chart", [1,2,3]);
+        create_status_chart("status-level", "status-level-chart", [1, 2, 3]);
 
         update_mqtt();
+
+        $(".input-lubricatorv2").hide();
+        $(".input-lmkv1").hide();
     };
 
 </script>
@@ -420,17 +528,24 @@
 
     <div class="column column-75">
         <div class="row grid-responsive">
-            <div class="column column-50">
+            <div class="column column-33">
                 <div class="card">
                     <div class="card-title">
                         <h4 id="deveui"></h4>
                     </div>
                 </div>
             </div>
-            <div class="column column-50">
+            <div class="column column-34">
                 <div class="card">
                     <div class="card-title">
                         <h4 id="type"></h4>
+                    </div>
+                </div>
+            </div>
+            <div class="column column-33">
+                <div class="card">
+                    <div class="card-title">
+                        <h4 id="snr_rssi"></h4>
                     </div>
                 </div>
             </div>
@@ -469,7 +584,7 @@
                     <div class="card-title">
                         <h4>Voltage (V)</h4>
                     </div>
-                    <div class="card-block" style="overflow: hidden" >
+                    <div class="card-block" style="overflow: hidden">
                         <div class="wrapper">
                             <canvas class="chart" id="voltage-level" height="120px"></canvas>
                         </div>
@@ -483,7 +598,7 @@
                     </div>
                     <div class="card-block" style="overflow: hidden">
                         <div class="wrapper">
-                            <canvas class="chart" id="current-level"  height="120px"></canvas>
+                            <canvas class="chart" id="current-level" height="120px"></canvas>
                         </div>
                     </div>
                 </div>
@@ -533,7 +648,7 @@
                     </div>
                     <div class="card-block" style="overflow: hidden">
                         <div class="wrapper">
-                            <canvas class="chart" id="temp-level"  height="120px"></canvas>
+                            <canvas class="chart" id="temp-level" height="120px"></canvas>
                         </div>
                     </div>
                 </div>
@@ -589,14 +704,76 @@
                             <option>Manual</option>
                             <option>Lubricator V1</option>
                             <option>Lubricator V2</option>
-                            <option>Monitor V1</option>
+                            <option>LMK V1</option>
                         </select>
 
+                        <div class="input-lubricatorv2">
+                            <div class="row">
+                                <div class="column">
+                                    <label for="input-cart-size">Cart Size</label>
+                                    <select name="input-cart-size" id="input-cart-size" value="1">
+                                        <option value="0">60 ml</option>
+                                        <option value="1">125 ml</option>
+                                        <option value="2">250 ml</option>
+                                        <option value="3">500 ml</option>
+                                    </select>
+                                </div>
+                                <div class="column">
+                                    <label for="input-shot-size">Shot Size (1-15)</label>
+                                    <input type="text" name="input-shot-size" id="input-shot-size" value="2">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="column">
+                                    <label for="input-level">Level (0-100)</label>
+                                    <input type="text" name="input-level" id="input-level" value="100">
+                                </div>
+                                <div class="column">
+                                    <label for="input-alarm">Alarm (HEX)</label>
+                                    <input type="text" name="input-alarm" id="input-alarm" value="00">
+                                </div>
+                            </div>
+                            <div class="row">
+                                <div class="column">
+                                    <label for="input-voltage">Voltage (0-6.6 V)</label>
+                                    <input type="text" name="input-voltage" id="input-voltage" value="3.3">
+                                </div>
+                                <div class="column">
+                                    <label for="input-current">Current (0-822)</label>
+                                    <input type="text" name="input-current" id="input-current" value="20">
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="input-lmkv1">
+                            <label for="input-pump1">Pump 1 (HEX:0-F)</label>
+                            <input type="text" name="input-pump1" id="input-pump1" value="1">
+                            <label for="input-pump2">Pump 2 (HEX:0-F)</label>
+                            <input type="text" name="input-pump2" id="input-pump2" value="2">
+                            <label for="input-pump3">Pump 3 (HEX:0-F)</label>
+                            <input type="text" name="input-pump3" id="input-pump3" value="3">
+                        </div>
+                        <div class="row">
+                            <div class="column">
+                                <label for="input-delay">Delay (1-4095)</label>
+                                <input type="text" name="input-delay" id="input-delay" value="90">
+                            </div>
+                            <div class="column">
+                                <label for="input-temp">Temp (-40 to 85)</label>
+                                <input type="text" name="input-temp" id="input-temp" value="20">
+                            </div>
+                        </div>
+
+                        <!--
                         <label for="keepalive">Keep Alive Interval</label>
                         <input type="text" name="keepalive" id="keepalive">
 
                         <label for="sensordata">Raw Sensor Data</label>
                         <input type="text" name="sensordata" id="sensordata">
+-->
+
+                        <br>
+                        <input class="button-primary" type="button" value="Build Command" onclick="build_command()">
 
                         <label for="command">Command</label>
                         <input type="text" name="command" id="command">
