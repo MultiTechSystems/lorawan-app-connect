@@ -1,0 +1,23 @@
+@startuml
+
+participant "LoRaWAN Device"
+participant "Conduit"
+
+box "App Server"
+participant "MQTT Broker"
+participant "Application Server"
+
+end box
+
+"LoRaWAN Device" -> Conduit : Join Request
+Conduit -> "MQTT Broker" : Joined
+"MQTT Broker" -> "Application Server" : Joined
+
+"LoRaWAN Device" -> Conduit : Uplink
+Conduit -> "MQTT Broker" : Uplink
+"MQTT Broker" -> "Application Server" : Uplink
+
+"LoRaWAN Device" <- Conduit : Downlink
+Conduit <- "MQTT Broker" : Downlink
+"MQTT Broker" <- "Application Server" : Downlink
+@enduml

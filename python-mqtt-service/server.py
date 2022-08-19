@@ -23,12 +23,18 @@ def on_mqtt_connect(client, userdata, flags, rc):
 
 def on_mqtt_message(client, userdata, msg):
    print(msg.topic,msg.payload)
+
+
    if "/up" in msg.topic:
       print("handling up message")
       p_json = json.loads(msg.payload)
       if not p_json["deveui"] in devices:
          print("adding device to list")
          devices.append(p_json["deveui"])
+      if "data-format" in p_json and p_json["data-format"] == "hexadecimal":
+         msg.payload["data"] = b64encode(bytes.fromhex(p_json["data"])).decode()
+         msg.payload = json.dumps(p_json)
+
    mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": json.loads(msg.payload)})
 
    if "/init" in msg.topic:

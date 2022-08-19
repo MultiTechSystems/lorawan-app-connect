@@ -35,6 +35,10 @@
 </style>
 
 <script lang="javascript">
+
+    var scaleX = 5;
+    var scaleY = 3;
+
     function send_command() {
         console.log("sending http request")
         const xhttp = new XMLHttpRequest();
@@ -46,15 +50,33 @@
         xhttp.send(JSON.stringify({ "command": document.getElementById("command").value }));
     }
 
-;
     function drawBoard(){
-        var radius = 2;
-        var centerX = 20 + Math.floor(Math.random() * 250);
-        var centerY = 20 + Math.floor(Math.random() * 110);
+        var radius = 7;
+
+        var rssi = [
+            parseInt($("#mtb1_rssi").val()),
+            parseInt($("#mtb3_rssi").val()),
+            parseInt($("#mtb2_rssi").val()),
+            parseInt($("#mtb4_rssi").val()),
+        ];
+
+        // Convert RSSI to approx distance from each gateway
+        // Calculate X,Y from circle intersection
+
+        var centerX = (parseInt($("#mtb1_x").val()) + parseInt($("#mtb2_x").val()) + parseInt($("#mtb3_x").val()) + parseInt($("#mtb4_x").val())) / 4;
+        centerX -= (rssi[0] - rssi[1]) * scaleX;
+        centerX -= (rssi[2] - rssi[3]) * scaleX;
+        var centerY = (parseInt($("#mtb1_y").val()) + parseInt($("#mtb2_y").val()) + parseInt($("#mtb3_y").val()) + parseInt($("#mtb4_y").val())) / 4;
+        centerY -= (rssi[0] - rssi[2]) * scaleY;
+        centerY -= (rssi[1] - rssi[3]) * scaleY;
 
         console.log("update position", centerX, centerY);
+
         var canvas = document.getElementById("canvas");
         var context = canvas.getContext("2d")
+
+        updateGatewayLocations();
+
         context.beginPath();
         context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
         context.fillStyle = '#30FF00';
@@ -62,6 +84,39 @@
         context.lineWidth = 1;
         context.strokeStyle = 'black';
         context.stroke();
+    }
+
+    function updateGatewayLocations() {
+        var radius = 12;
+        var canvas = document.getElementById("canvas");
+        var context = canvas.getContext("2d")
+
+        context.clearRect(0, 0, canvas.width, canvas.height);
+
+        var scaleX = $("#scale_x").val();
+        var scaleY = $("#scale_y").val();
+
+        for (var i = 1; i <= 4; i++) {
+            var centerX = parseInt($("#mtb" + i.toString() + "_x").val());
+            var centerY = parseInt($("#mtb" + i.toString() + "_y").val());
+            context.beginPath();
+            context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
+            context.fillStyle = '#0000FF';
+            context.fill();
+            context.lineWidth = 1;
+            context.strokeStyle = 'white';
+            context.stroke();
+
+            // change font and font-size for better visibilty
+            context.font = "20px Open Sans,sans-serif";
+            context.fillStyle = 'white';
+            // draw "Test text" at X = 10 and Y = 30
+            context.fillText( i.toString(), centerX -5, centerY+8 );
+        }
+    }
+
+    window.onload = function () {
+        drawBoard();
     }
 
 
@@ -83,7 +138,67 @@
                         <div class="outsideWrapper">
                             <div class="insideWrapper">
                                 <img src="/static/images/warehouse.jpeg" class="coveredImage" />
-                                <canvas id="canvas" class="coveringCanvas"></canvas>
+                                <canvas id="canvas" class="coveringCanvas" width=1200 height=800></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="row">
+            <div class="column">
+                <div class="card">
+                    <div class="card-title">
+                        <h2>MTB Gateway Locations</h2>
+                    </div>
+                    <div class="card-block">
+                        <div class="row">
+                            <div class="column">
+                                <label for="mtb1_x">MTB 1 X-POS</label>
+                                <input type="text" name="mtb1_x" id="mtb1_x" value="80">
+                            </div>
+                            <div class="column">
+                                <label for="mtb1_y">MTB 1 Y-POS</label>
+                                <input type="text" name="mtb1_y" id="mtb1_y" value="60">
+                            </div>
+                            <div class="column">
+                                <label for="mtb2_x">MTB 2 X-POS</label>
+                                <input type="text" name="mtb2_x" id="mtb2_x" value="80">
+                            </div>
+                            <div class="column">
+                                <label for="mtb2_y">MTB 2 Y-POS</label>
+                                <input type="text" name="mtb2_y" id="mtb2_y" value="740">
+                            </div>
+                            <div class="column">
+                                <label for="scale_x">Scale X</label>
+                                <input type="text" name="scale_x" id="scale_x" value="20">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="column">
+                                <label for="mtb3_x">MTB 3 X-POS</label>
+                                <input type="text" name="mtb3_x" id="mtb3_x" value="1120">
+                            </div>
+                            <div class="column">
+                                <label for="mtb3_y">MTB 3 Y-POS</label>
+                                <input type="text" name="mtb3_y" id="mtb3_y" value="60">
+                            </div>
+                            <div class="column">
+                                <label for="mtb4_x">MTB 4 X-POS</label>
+                                <input type="text" name="mtb4_x" id="mtb4_x" value="1120">
+                            </div>
+                            <div class="column">
+                                <label for="mtb4_y">MTB 4 Y-POS</label>
+                                <input type="text" name="mtb4_y" id="mtb4_y" value="740">
+                            </div>
+                            <div class="column">
+                                <label for="scale_y">Scale Y</label>
+                                <input type="text" name="scale_y" id="scale_y" value="12">
+                            </div>
+                        </div>
+                        <div class="row">
+                            <div class="column">
+                                <input class="button-primary" type="button" value="Update Gateways" onclick="updateGatewayLocations()">
                             </div>
                         </div>
                     </div>
@@ -114,11 +229,52 @@
                             <option>Locator Tag V1</option>
                         </select>
 
-                        <label for="keepalive">Keep Alive Interval</label>
-                        <input type="text" name="keepalive" id="keepalive">
+                        <div class="row">
+                            <div class="column column-75">
+                                <label for="mtb1_eui">MTB EUI 1</label>
+                                <input type="text" name="mtb1_eui" id="mtb1_eui">
+                            </div>
+                            <div class="column column-25">
+                                <label for="mtb1_rssi">RSSI</label>
+                                <input type="text" name="mtb1_rssi" id="mtb1_rssi" value="-75">
+                            </div>
+                        </div>
 
-                        <label for="sensordata">Raw Sensor Data</label>
-                        <input type="text" name="sensordata" id="sensordata">
+                        <div class="row">
+                            <div class="column column-75">
+                                <label for="mtb2_eui">MTB EUI 2</label>
+                                <input type="text" name="mtb2_eui" id="mtb2_eui">
+                            </div>
+                            <div class="column column-25">
+                                <label for="mtb2_rssi">RSSI</label>
+                                <input type="text" name="mtb2_rssi" id="mtb2_rssi" value="-75">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="column column-75">
+                                <label for="mtb3_eui">MTB EUI 3</label>
+                                <input type="text" name="mtb3_eui" id="mtb3_eui">
+                            </div>
+                            <div class="column column-25">
+                                <label for="mtb3_rssi">RSSI</label>
+                                <input type="text" name="mtb3_rssi" id="mtb3_rssi" value="-75">
+                            </div>
+                        </div>
+
+                        <div class="row">
+                            <div class="column column-75">
+                                <label for="mtb4_eui">MTB EUI 4</label>
+                                <input type="text" name="mtb4_eui" id="mtb4_eui">
+                            </div>
+                            <div class="column column-25">
+                                <label for="mtb4_rssi">RSSI</label>
+                                <input type="text" name="mtb4_rssi" id="mtb4_rssi" value="-75">
+                            </div>
+                        </div>
+
+                        <br>
+                        <input class="button-primary" type="button" value="Build Command" onclick="build_command()">
 
                         <label for="command">Command</label>
                         <input type="text" name="command" id="command">

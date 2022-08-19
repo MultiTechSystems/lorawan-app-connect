@@ -8,10 +8,6 @@
     }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
-<script src="/static/js/chart-data.js"></script>
-
 <script lang="javascript">
     var deveui = "";
 
@@ -417,9 +413,16 @@
                         $("#deveui").text("EUI: " + deveui);
                         $("#snr_rssi").text("SNR/RSSI: " + message.payload["lsnr"].toString() + " dB / " + message.payload["rssi"].toString() + " dBm");
 
-                        if (message.payload["data"].length == 6) {
+                        var data_array = [];
+                        var data_str = atob(message.payload["data"]);
+                        for (var i = 0; i < data_str.length; i++)
+                            data_array.push(data_str.charCodeAt(i));
+
+                        console.log(data_array);
+
+                        if (data_array.length == 3) {
                             console.log("V1 FORMAT");
-                        } else if (message.payload["data"].length == 12) {
+                        } else if (data_array.length == 6) {
                             console.log("LMK FORMAT");
 
                             $(".lubricatorv2").hide();
@@ -427,17 +430,17 @@
 
                             $("#cart").text("NA");
                             $("#shot").text("NA");
-                            $("#type").text("LMK V1");
+                            $("#type").text("Type: LMK V1");
 
                             var cursor = 0;
-                            var version = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
+                            var version = data_array[cursor];
+                            cursor += 1;
+                            var status = (data_array[cursor] << 8) | data_array[cursor+1];
                             cursor += 2;
-                            var status = parseInt(message.payload.data.substring(cursor, cursor + 4), 16);
-                            cursor += 4;
-                            var delay = parseInt(message.payload.data.substring(cursor, cursor + 4), 16);
+                            var delay = (data_array[cursor] << 8) | data_array[cursor+1];
                             delay = (delay / 60.0).toFixed(2);
-                            cursor += 4;
-                            var temp = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
+                            cursor += 2;
+                            var temp = data_array[cursor];
                             temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
                             cursor += 2;
 
@@ -445,7 +448,7 @@
                             update_chart("temp-level-chart", temp);
                             update_status_chart("status-level-chart", status);
 
-                        } else if (message.payload["data"].length == 18) {
+                        } else if (data_array.length == 9) {
                             console.log("V2 FORMAT")
 
                             $(".lubricatorv2").show();
@@ -453,30 +456,30 @@
 
                             // VERSION | CART/SHOT | DELAY (2) | ALARM | LEFT | VOLTAGE | CURRENT | TEMP
                             var cursor = 0;
-                            var version = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
-                            cursor += 2;
-                            var cart_shot = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
-                            cursor += 2;
+                            var version = data_array[cursor];
+                            cursor += 1;
+                            var cart_shot = data_array[cursor];
+                            cursor += 1;
 
                             $("#cart").text("Cart Size: " + ((cart_shot & 0x60) == 0x60 ? "500ml" : (cart_shot & 0x40) == 0x40 ? "250ml" : (cart_shot & 0x20) == 0x20 ? "125ml" : "60ml"));
                             $("#shot").text("Shot Size: " + (cart_shot & 0x0F));
-                            $("#type").text("Lubricator V2");
-                            var delay = parseInt(message.payload.data.substring(cursor, cursor + 4), 16);
+                            $("#type").text("Type: Lubricator V2");
+                            var delay = (data_array[cursor] << 8) | data_array[cursor+1];
                             delay = (delay / 60.0).toFixed(2);
-                            cursor += 4;
-                            var alarm = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
                             cursor += 2;
-                            var level = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
-                            cursor += 2;
-                            var voltage = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
+                            var alarm = data_array[cursor];
+                            cursor += 1;
+                            var level = data_array[cursor];
+                            cursor += 1;
+                            var voltage = data_array[cursor];
                             voltage = (voltage * (3.3 / 256) * 2).toFixed(2);
-                            cursor += 2;
-                            var current = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
+                            cursor += 1;
+                            var current = data_array[cursor];
                             current = (current * 3.3/1024 * 1000).toFixed(2);
-                            cursor += 2;
-                            var temp = parseInt(message.payload.data.substring(cursor, cursor + 2), 16);
+                            cursor += 1;
+                            var temp = data_array[cursor];
                             temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
-                            cursor += 2;
+                            cursor += 1;
                             console.log(version, cart_shot, delay, alarm, level, voltage, current, temp);
 
                             update_chart("fluid-level-chart", level);
