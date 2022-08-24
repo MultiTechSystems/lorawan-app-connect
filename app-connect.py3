@@ -29,6 +29,7 @@ import logging
 import logging.handlers
 import socket
 import gzip
+from base64 import b64encode, b64decode
 
 from http.client import BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader
 from collections import deque
@@ -37,6 +38,22 @@ from collections import deque
 # LoRaWAN Application connecting to 3rd Party Back-end
 # AppEUI and AppURL are sent to conduit when a Join Accept message is received from the Lens Join Server
 # This application will save the AppEUI/AppURL pairs and use them to post to an HTTPS URL or publish to an MQTTS URL
+
+
+
+
+
+def custom_app_uplink_handler(app, topic, msg):
+    # print("Custom app uplink", topic, msg)
+    return (topic, msg)
+
+
+
+def custom_app_downlink_handler(app, topic, msg):
+    # print("Custom app downlink", topic, msg)
+    return (topic, msg)
+
+
 
 
 
@@ -69,18 +86,15 @@ app_mqtt_moved_topic = "lorawan/%s/%s/moved"
 app_mqtt_downlink_topic = "lorawan/%s/%s/down"
 app_mqtt_clear_topic = "lorawan/%s/%s/clear"
 
-
-
-def custom_app_uplink_handler(app, topic, msg):
-    # print("Custom app uplink", topic, msg)
-    return (topic, msg)
-
-
-
-def custom_app_downlink_handler(app, topic, msg):
-    # print("Custom app downlink", topic, msg)
-    return (topic, msg)
-
+# wildcards cannot be used for eui/uuid fields subscribe, too many messages would be passed over the backhaul
+# subscribe to lorawan/appeui/deveui/+ and lorawan/gw_uuid/deveui/+ topics
+app_mqtt_subscribe_topic = "lorawan/%s/%s/+"
+app_mqtt_api_request_topic = "lorawan/%s/%s/api_req"
+app_mqtt_api_result_topic = "lorawan/%s/%s/api_res"
+app_mqtt_lora_request_topic = "lorawan/%s/%s/lora_req"
+app_mqtt_lora_result_topic = "lorawan/%s/%s/lora_res"
+app_mqtt_log_request_topic = "lorawan/%s/%s/log_req"
+app_mqtt_log_result_topic = "lorawan/%s/%s/log_res"
 
 
 class GZipRotator(object):
@@ -96,6 +110,7 @@ class GZipRotator(object):
 apps = {}
 app_message_queue = {}
 gateways = []
+devices = {}
 mqtt_clients = {}
 http_clients = {}
 http_threads = {}
@@ -107,12 +122,14 @@ queue_size = 10
 downlink_query_interval = 30
 
 def on_mqtt_subscribe(client, userdata, mid, qos):
-    logging.info("subscribed: %s", json.dumps(userdata))
+    logging.debug("subscribed: %s", json.dumps(userdata))
 
 def on_mqtt_disconnect(client, userdata, rc):
-    logging.info("disconnecting reason  "  +str(rc))
+    logging.info("MQTT Disconnect reason  "  +str(rc))
     client.connected_flag=False
     client.disconnect_flag=True
+    if userdata["eui"] in apps:
+        apps[userdata["eui"]]["disconnected_flag"] = True
 
 def setup_mqtt_app(app_net):
     logging.info("Setup MQTT App")
@@ -193,16 +210,22 @@ def setup_mqtt_app(app_net):
     mqtt_clients[app_net["eui"]].on_subscribe = on_mqtt_subscribe
     mqtt_clients[app_net["eui"]].on_disconnect = on_mqtt_disconnect
 
-    if len(parts) == 2:
-        mqtt_clients[app_net["eui"]].connect(parts[1][2:], 1883, 60)
-    if len(parts) == 3:
-        mqtt_clients[app_net["eui"]].connect(parts[1][2:], int(parts[2]), 60)
+    try:
+        if len(parts) == 2:
+            mqtt_clients[app_net["eui"]].connect(parts[1][2:], 1883, 60)
+        if len(parts) == 3:
+            mqtt_clients[app_net["eui"]].connect(parts[1][2:], int(parts[2]), 60)
 
-    mqtt_clients[app_net["eui"]].loop_start()
+        mqtt_clients[app_net["eui"]].loop_start()
 
-    init_msg = json.dumps({'gateways_euis': gateways})
-    topic = app_mqtt_init_topic % ( app_net["eui"], gw_uuid )
-    mqtt_clients[app_net["eui"]].publish(topic, init_msg, 1, True)
+        init_msg = json.dumps({'gateways_euis': gateways})
+        topic = app_mqtt_init_topic % ( app_net["eui"], gw_uuid )
+        mqtt_clients[app_net["eui"]].publish(topic, init_msg, 1, True)
+    except Exception as e:
+        logging.exception("MQTT connect exception", exc_info=e)
+        raise e
+
+
 
 def setup_http_app(app_net):
     global request_timeout
@@ -323,6 +346,8 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
     if rc == 0:
         client.connected_flag=True
         client.disconnect_flag=False
+        if userdata["eui"] in apps:
+            apps[userdata["eui"]]["disconnected_flag"] = False
         client.will_set(app_mqtt_disconnected_topic % ( userdata["eui"], gw_uuid ), None, 1, retain=False)
 
         if flags["session present"] == False:
@@ -336,29 +361,22 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
             for dev in dev_list:
                 if dev["appeui"] in apps and userdata["eui"] == dev["appeui"]:
                     if apps[dev["appeui"]]["isMqtt"] and dev["appeui"] in mqtt_clients:
-                        topic = app_mqtt_downlink_topic % ( dev["appeui"], dev["deveui"] )
-                        logging.info("subscribe for downlinks: %s", topic)
+
+                        topic = app_mqtt_subscribe_topic % ( appeui, dev["deveui"] )
+                        logging.debug("subscribe for app messages: %s", topic)
                         mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
-                        topic = app_mqtt_clear_topic % ( dev["appeui"], dev["deveui"] )
-                        logging.info("subscribe for queue clear: %s", topic)
-                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                        topic = app_mqtt_downlink_topic % ( gw_uuid, dev["deveui"] )
-                        logging.info("subscribe for downlinks: %s", topic)
-                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                        topic = app_mqtt_clear_topic % ( gw_uuid, dev["deveui"] )
-                        logging.info("subscribe for queue clear: %s", topic)
+                        topic = app_mqtt_subscribe_topic % ( gw_uuid, dev["deveui"] )
+                        logging.debug("subscribe for app messages: %s", topic)
                         mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
                         for gw in gateways:
                             topic = app_mqtt_downlink_topic % ( gw, dev["deveui"] )
-                            logging.info("subscribe for downlinks: %s", topic)
+                            logging.v("subscribe for downlinks: %s", topic)
                             mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
                             topic = app_mqtt_clear_topic % ( gw, dev["deveui"] )
-                            logging.info("subscribe for queue clear: %s", topic)
+                            logging.debug("subscribe for queue clear: %s", topic)
                             mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
 def on_mqtt_app_message(client, userdata, msg):
@@ -368,9 +386,24 @@ def on_mqtt_app_message(client, userdata, msg):
     deveui = parts[2]
     event = parts[3]
 
-    logging.info("Device eui: " + deveui)
-    logging.info("App eui: " + appeui)
-    logging.info("Event: " + event)
+    logging.debug("Device eui: " + deveui)
+    logging.debug("App eui: " + appeui)
+    logging.debug("Event: " + event)
+
+    if userdata["eui"] == default_app["eui"] and (event == "api_req" or event == "lora_req" or event == "log_req"):
+        # Only the default_app server is allowed to make system requests
+
+        if "requestOptions" in default_app and default_app["requestOptions"]["api"] and event == "api_req":
+            # perform api request
+            app_api_request(apps[appeui], msg.payload)
+
+        if "requestOptions" in default_app and default_app["requestOptions"]["lora"] and event == "lora_req":
+            # perform lora request
+            app_lora_query_request(apps[appeui], msg.payload)
+
+        if "requestOptions" in default_app and default_app["requestOptions"]["log"] and event == "log_req":
+            # perform log request
+            app_log_query_request(apps[appeui], msg.payload)
 
     if event == "down":
         app_schedule_downlink(apps[appeui], deveui, msg.payload)
@@ -378,6 +411,71 @@ def on_mqtt_app_message(client, userdata, msg):
     if event == "clear":
         topic = local_mqtt_clear_topic % deveui
         local_client.publish(topic, None, 1, True)
+
+def app_log_query_request(app, msg):
+    json_obj = json.loads(msg)
+
+    if not ";" in json_obj["file"] and not ".." in json_obj["file"]:
+        stream = os.popen('tail -n ' +  str(json_obj["lines"]) + " " + json_obj["file"])
+        output = stream.read()
+        stream.close()
+    else:
+        output = "command rejected, no semi-colons or '..' allowed"
+
+    data = json.dumps({"result": output})
+
+    app_publish_msg(app, app_mqtt_lora_result_topic % (app["eui"], gw_uuid), data)
+
+
+def app_lora_query_request(app, msg):
+    json_obj = json.loads(msg)
+
+    if not ";" in json_obj["command"]:
+        stream = os.popen('lora-query -x ' + json_obj["command"])
+        output = stream.read()
+        stream.close()
+    else:
+        output = "command rejected, no semi-colons allowed"
+
+    try:
+        # try to parse as json
+        json.loads(output)
+        data = output
+    except:
+        data = json.dumps({"result": output})
+    app_publish_msg(app, app_mqtt_lora_result_topic % (app["eui"], gw_uuid), data)
+
+def app_api_request(app, msg):
+    global local_http_client
+    json_obj = json.loads(msg)
+    method = json_obj["method"]
+    path = json_obj["path"]
+    body = json_obj["body"]
+    headers = {"Content-type": "application/json", "Accept": "text/plain"}
+
+    # try twice incase of connection error
+    attempt = 0
+    while attempt < 2:
+        try:
+            local_http_client.request(method, path, body, headers)
+            res = local_http_client.getresponse()
+            data = res.read().decode('utf-8')
+            # successful
+            attempt = 1
+        except (IOError, KeyboardInterrupt) as e:
+            logging.exception("API Request exception", exc_info=e)
+            local_http_client.close()
+        except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError) as e:
+            logging.exception("API Request exception", exc_info=e)
+            local_http_client.close()
+
+        attempt = attempt + 1
+
+    if attempt > 2:
+        print(data, attempt)
+        data = json.dumps({"code":500,"error":"request failed","status":"fail"})
+
+    app_publish_msg(app, app_mqtt_api_result_topic % (app["eui"], gw_uuid), data)
 
 def app_schedule_downlink(app, deveui, msg):
 
@@ -390,14 +488,24 @@ def app_schedule_downlink(app, deveui, msg):
 
     (topic, msg) = response
 
+    if "encodeHex" in default_app and default_app["encodeHex"]:
+        payload_json = json.loads(msg)
+        try:
+            payload_json["data"] = b64encode(bytes.fromhex(payload_json["data"])).decode()
+            msg = json.dumps(payload_json)
+        except Exception as e:
+            logging.exception("Downlink encode exception", exc_info=e)
+            pass
+
     local_client.publish(topic, msg, 1, True)
 
 
 
 def app_publish_msg(app, topic, msg):
-    logging.info("Uplink json_data: %s", msg)
 
     if re.match(".*\/up$", topic):
+        logging.debug("Uplink json_data: %s", msg)
+
         response = custom_app_uplink_handler(app, topic, msg)
         if not response:
             return False
@@ -415,12 +523,11 @@ def app_publish_msg(app, topic, msg):
                 http_uplink_queue[app["eui"]].task_done()
         http_uplink_queue[app["eui"]].put((topic,msg))
 
-
     return True
 
 
 def app_publish_http(app, path, msg, retain=False):
-    logging.info("POST to '%s'", path)
+    logging.debug("POST to '%s'", path)
     headers = {"Content-type": "application/json", "Accept": "text/plain"}
 
     data = None
@@ -434,16 +541,16 @@ def app_publish_http(app, path, msg, retain=False):
                 with http_threads[app["eui"]]["lock"]:
                     http_clients[app["eui"]].request("POST", path, msg, headers)
                     res = http_clients[app["eui"]].getresponse()
-                    logging.info("%d %s", res.status, res.reason)
+                    logging.debug("%d %s", res.status, res.reason)
                     data = res.read().decode('utf-8')
-                    logging.info(data)
+                    logging.debug(data)
                     sent = True
                     break
             except (IOError, KeyboardInterrupt) as e:
-                print("Request exception", e)
+                logging.error("Request exception", e)
                 http_clients[app["eui"]].close()
             except (BadStatusLine, ResponseNotReady, CannotSendRequest, CannotSendHeader, MemoryError) as e:
-                print("Response exception", e)
+                logging.error("Response exception", e)
                 http_clients[app["eui"]].close()
             finally:
                 retry = retry - 1
@@ -484,7 +591,7 @@ def app_publish_http(app, path, msg, retain=False):
 
                 http_threads[app["eui"]]["ready"] = True
         except ValueError:
-            logging.info("failed to parse response as json")
+            logging.error("failed to parse response as json")
 
 
 def on_mqtt_connect(client, userdata, flags, rc):
@@ -492,6 +599,8 @@ def on_mqtt_connect(client, userdata, flags, rc):
     client.subscribe(local_mqtt_sub_up, 1)
     client.subscribe(local_mqtt_sub_joined, 1)
     client.subscribe(local_mqtt_sub_moved, 1)
+    if userdata["eui"] in apps:
+        apps[userdata["eui"]]["disconnected_flag"] = False
 
 
 def on_mqtt_message(client, userdata, msg):
@@ -509,19 +618,19 @@ def on_mqtt_message(client, userdata, msg):
         deveui = parts[2]
         event = parts[3]
 
-    logging.info("Device eui: " + deveui + " App eui: " + appeui + " Event: " + event)
+    logging.debug("Device eui: " + deveui + " App eui: " + appeui + " Event: " + event)
 
     if event == "joined":
-        logging.info("Device joined " + deveui)
+        logging.debug("Device joined " + deveui)
 
         try:
             json_data = json.loads(msg.payload.decode("utf-8"))
 
-            logging.info("App eui: " + json_data["appeui"])
+            logging.debug("App eui: " + json_data["appeui"])
             appeui = json_data["appeui"]
             gweui = json_data["gweui"]
         except ValueError:
-            logging.info('Decoding JSON has failed')
+            logging.error('Decoding JSON has failed')
             return
 
         if appeui not in apps:
@@ -531,40 +640,35 @@ def on_mqtt_message(client, userdata, msg):
             app_data = json.loads(output)
 
             if "status" in app_data and app_data["status"] == "fail":
-                logging.info("failed to find application")
+                logging.info("Failed to find application from network server")
                 return
             else:
                 apps[appeui] = app_data
                 setup_app(app_data)
 
         if apps[appeui]["isMqtt"]:
-            downlink_topic = app_mqtt_downlink_topic % ( appeui, deveui )
-            logging.info("subscribe for downlinks: %s", downlink_topic)
-            mqtt_clients[appeui].subscribe(str(downlink_topic), 1)
-
-            topic = app_mqtt_clear_topic % ( appeui, deveui )
-            logging.info("subscribe for queue clear: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-            topic = app_mqtt_downlink_topic % ( gw_uuid, deveui )
-            logging.info("subscribe for downlinks: %s", topic)
+            topic = app_mqtt_subscribe_topic % ( appeui, dev["deveui"] )
+            logging.debug("subscribe for app messages: %s", topic)
             mqtt_clients[appeui].subscribe(str(topic), 1)
 
-            topic = app_mqtt_clear_topic % ( gw_uuid, deveui )
-            logging.info("subscribe for queue clear: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+            topic = app_mqtt_subscribe_topic % ( gw_uuid, dev["deveui"] )
+            logging.debug("subscribe for app messages: %s", topic)
+            mqtt_clients[appeui].subscribe(str(topic), 1)
 
             for gw in gateways:
                 topic = app_mqtt_downlink_topic % ( gw, deveui )
-                logging.info("subscribe for downlinks: %s", topic)
+                logging.debug("subscribe for downlinks: %s", topic)
                 mqtt_clients[appeui].subscribe(str(topic), 1)
 
                 topic = app_mqtt_clear_topic % ( gw, deveui )
-                logging.info("subscribe for queue clear: %s", topic)
-                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+                logging.debug("subscribe for queue clear: %s", topic)
+                mqtt_clients[appeui].subscribe(str(topic), 1)
 
             joined_topic = app_mqtt_joined_topic % (appeui, deveui)
             app_publish_msg(apps[appeui], joined_topic, msg.payload)
+            joined_topic = app_mqtt_joined_topic % (gw_uuid, deveui)
+            app_publish_msg(apps[appeui], joined_topic, msg.payload)
+
         elif apps[appeui]["isHttp"]:
             topic = app_http_joined_path % ( appeui, deveui )
             app_publish_msg(apps[appeui], topic, msg.payload)
@@ -577,21 +681,73 @@ def on_mqtt_message(client, userdata, msg):
     if event == "up":
         if appeui in apps:
             if apps[appeui]["isMqtt"]:
+                if apps[appeui]["disconnected_flag"] == True:
+                    # schedule downlink with backhaul down message default port: 1 data: 0xFF ("/w==") payload
+                    # downlink should be scheduled only once per X (default:10) minutes to avoid causing data-pending flag to be set and infinite uplinks from end-device
+                    backhaul_timeout = 600
+                    backhaul_port = 1
+                    backhaul_payload = "/w="
+
+                    if "backhaulDetect" in default_app:
+                        if "timeout" in default_app["backhaulDetect"]:
+                            backhaul_timeout = default_app["backhaulDetect"]["timeout"]
+
+                        if "port" in default_app["backhaulDetect"]:
+                            backhaul_port = default_app["backhaulDetect"]["port"]
+
+                        if "payload" in default_app["backhaulDetect"]:
+                            backhaul_payload = b64encode(bytes.fromhex(default_app["backhaulDetect"]["payload"])).decode()
+
+                    cur_epoc_time = int(time.time())
+                    if deveui in devices:
+                        logging.debug("check backhaul down time %d %d %d", cur_epoc_time, devices[deveui]["last_seen"], (cur_epoc_time - devices[deveui]["last_seen"]))
+                    if not deveui in devices or (deveui in devices and (cur_epoc_time - devices[deveui]["last_seen"]) > backhaul_timeout):
+                        devices[deveui] = {"last_seen": cur_epoc_time}
+                        app_schedule_downlink(apps[appeui], deveui, json.dumps({"port":backhaul_port,"data":backhaul_payload}))
+
+                if "encodeHex" in default_app and default_app["encodeHex"]:
+                    payload_json = json.loads(msg.payload)
+                    payload_json["data"] = b64decode(payload_json["data"]).hex()
+                    payload_json["data-format"] = "hexadecimal";
+                    msg.payload = json.dumps(payload_json)
+
                 app_publish_msg(apps[appeui], app_mqtt_uplink_topic % ( appeui, deveui ), msg.payload)
             elif apps[appeui]["isHttp"]:
+                if "encodeHex" in default_app and default_app["encodeHex"]:
+                    payload_json = json.loads(msg.payload)
+                    payload_json["data"] = b64decode(payload_json["data"]).hex()
+                    payload_json["data-format"] = "hexadecimal";
+                    msg.payload = json.dumps(payload_json)
+
                 app_publish_msg(apps[appeui], app_http_uplink_path % ( appeui, deveui ), msg.payload)
 
     if event == "moved":
         if appeui in apps:
             if apps[appeui]["isMqtt"]:
                 app_publish_msg(apps[appeui], app_mqtt_moved_topic % ( appeui, deveui ), msg.payload)
+                topic = app_mqtt_subscribe_topic % ( appeui, dev["deveui"] )
+                logging.debug("unsubscribe from app messages: %s", topic)
+                mqtt_clients[appeui].unsubscribe(str(topic), 1)
+
+                topic = app_mqtt_subscribe_topic % ( gw_uuid, dev["deveui"] )
+                logging.debug("unsubscribe from app messages: %s", topic)
+                mqtt_clients[appeui].unsubscribe(str(topic), 1)
+
+                for gw in gateways:
+                    topic = app_mqtt_downlink_topic % ( gw, deveui )
+                    logging.debug("unsubscribe from downlinks: %s", topic)
+                    mqtt_clients[appeui].unsubscribe(str(topic), 1)
+
+                    topic = app_mqtt_clear_topic % ( gw, deveui )
+                    logging.debug("unsubscribe from queue clear: %s", topic)
+                    mqtt_clients[appeui].unsubscribe(str(topic), 1)
 
 
 def http_uplink_thread(appeui):
-    logging.info("uplink thread %s started", appeui)
+    logging.info("Uplink thread %s started", appeui)
 
     while http_threads[appeui]["running"]:
-        logging.info("uplink thread %s", appeui)
+        logging.info("Uplink thread %s", appeui)
 
         # if not http_threads[appeui]["ready"]:
         #     time.sleep(5)
@@ -630,16 +786,16 @@ def http_uplink_thread(appeui):
             http_uplink_queue[appeui].task_done()
 
 
-    logging.info("uplink thread %s exited", appeui)
+    logging.info("Uplink thread %s exited", appeui)
     return
 
 
 
 def http_downlink_thread(appeui):
-    logging.info("downlink thread %s started", appeui)
+    logging.info("Downlink thread %s started", appeui)
 
     while http_threads[appeui]["running"]:
-        logging.info("downlink thread %s", appeui)
+        logging.info("Downlink thread %s", appeui)
 
         if not appeui in http_app_devices:
             logging.info("Device list for %s not found", appeui)
@@ -655,7 +811,7 @@ def http_downlink_thread(appeui):
         path = app_http_downlink_path % ( appeui )
 
         deveuis = http_app_devices[appeui]
-        logging.info("GET from '%s'", path)
+        logging.debug("GET from '%s'", path)
         headers = {"Content-type": "application/json", "Accept": "text/plain"}
 
         data = None
@@ -669,9 +825,9 @@ def http_downlink_thread(appeui):
                     with http_threads[appeui]["lock"]:
                         http_clients[appeui].request("GET", path, json.dumps(deveuis), headers)
                         res = http_clients[appeui].getresponse()
-                        logging.info("%d %s", res.status, res.reason)
+                        logging.debug("%d %s", res.status, res.reason)
                         data = res.read().decode("utf-8")
-                        logging.info("API Response: " + data)
+                        logging.debug("API Response: " + data)
                         break
                 except (IOError, KeyboardInterrupt) as e:
                     print("Exception during request GET", e)
@@ -695,14 +851,14 @@ def http_downlink_thread(appeui):
                         if "deveui" in downlink and "data" in downlink:
                             app_schedule_downlink(apps[appeui], downlink["deveui"], json.dumps(downlink))
             except ValueError:
-                logging.info("failed to parse response as json")
+                logging.error("failed to parse response as json")
 
 
         with http_threads[appeui]["downlink_cond"]:
             http_threads[appeui]["downlink_cond"].wait(http_threads[appeui]["downlink_query_interval"])
 
 
-    logging.info("downlink thread %s exited", appeui)
+    logging.info("Downlink thread %s exited", appeui)
     return
 
 
@@ -711,7 +867,7 @@ def http_downlink_thread(appeui):
 format = "%(asctime)s: %(message)s"
 logging.basicConfig(format=format, level=logging.INFO, datefmt="%Y-%m-%dT%H:%M:%S%z")
 handler = logging.handlers.SysLogHandler('/dev/log')
-handler.ident = "lora-app-connect"
+handler.ident = "lora-app-connect: "
 
 logging.getLogger().addHandler(handler)
 # rotate = logging.handlers.RotatingFileHandler('/var/log/lora-app-net.log', 'a', 15*1024, 4)
@@ -719,6 +875,7 @@ logging.getLogger().addHandler(handler)
 # logging.getLogger().addHandler(rotate)
 
 
+local_http_client = http.client.HTTPConnection("127.0.0.1", 80, timeout=20)
 
 local_client = mqtt.Client()
 
@@ -741,7 +898,30 @@ stream.close()
 try:
     default_app = json.loads(output)
 except ValueError:
-    logging.info("Network Server is not available")
+    logging.error("Network Server is not available")
+    time.sleep(5)
+    exit(1)
+
+stream = os.popen('lora-query -x config  | jsparser --jsobj --path log')
+output = stream.read()
+stream.close()
+
+try:
+    log_info = json.loads(output)
+    log_levels = {
+        100: 0,
+        60: 0,
+        50: 10,
+        30: 20,
+        20: 30,
+        10: 40,
+        0: 50
+    }
+
+    log_level = log_levels.get(log_info["level"], 20)
+    logging.info("Set log level %d", log_level)
+    logging.getLogger().setLevel(log_level)
+except ValueError:
     time.sleep(5)
     exit(1)
 
@@ -772,7 +952,7 @@ stream.close()
 
 for app in app_list:
     apps[app["eui"]] = app
-    logging.info("Setup App", app)
+    logging.debug("Setup App", app)
     setup_app(app)
 
 
@@ -805,31 +985,21 @@ query.close()
 for dev in dev_list:
     if dev["appeui"] in apps:
         if apps[dev["appeui"]]["isMqtt"] and dev["appeui"] in mqtt_clients:
-            topic = app_mqtt_downlink_topic % ( dev["appeui"], dev["deveui"] )
-            logging.info("subscribe for downlinks: %s", topic)
+            topic = app_mqtt_subscribe_topic % ( dev["appeui"], dev["deveui"] )
+            logging.debug("subscribe for app messages: %s", topic)
             mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
-
-            topic = app_mqtt_clear_topic % ( dev["appeui"], dev["deveui"] )
-            logging.info("subscribe for queue clear: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-            topic = app_mqtt_downlink_topic % ( gw_uuid, dev["deveui"] )
-            logging.info("subscribe for downlinks: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-
-            topic = app_mqtt_clear_topic % ( gw_uuid, dev["deveui"] )
-            logging.info("subscribe for queue clear: %s", topic)
+            topic = app_mqtt_subscribe_topic % ( gw_uuid, dev["deveui"] )
+            logging.debug("subscribe for app messages: %s", topic)
             mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
             for gw in gateways:
                 topic = app_mqtt_downlink_topic % ( gw, dev["deveui"] )
-                logging.info("subscribe for downlinks: %s", topic)
+                logging.debug("subscribe for downlinks: %s", topic)
                 mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
                 topic = app_mqtt_clear_topic % ( gw, dev["deveui"] )
-                logging.info("subscribe for queue clear: %s", topic)
+                logging.debug("subscribe for queue clear: %s", topic)
                 mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
 
         if apps[dev["appeui"]]["isHttp"] and dev["appeui"] in http_clients:
@@ -840,7 +1010,7 @@ for dev in dev_list:
 
 
 
-logging.info("start client")
+logging.info("Start client")
 
 
 local_client.loop_start()
