@@ -24,6 +24,9 @@ def on_mqtt_connect(client, userdata, flags, rc):
 def on_mqtt_message(client, userdata, msg):
    print(msg.topic,msg.payload)
 
+   if "/close" in msg.topic:
+      mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": ""})
+      return
 
    if "/up" in msg.topic:
       print("handling up message")
@@ -34,8 +37,6 @@ def on_mqtt_message(client, userdata, msg):
       if "data-format" in p_json and p_json["data-format"] == "hexadecimal":
          msg.payload["data"] = b64encode(bytes.fromhex(p_json["data"])).decode()
          msg.payload = json.dumps(p_json)
-
-   mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": json.loads(msg.payload)})
 
    if "/init" in msg.topic:
       parts = msg.topic.split("/")
@@ -50,6 +51,8 @@ def on_mqtt_message(client, userdata, msg):
       if not parts[1] in applications:
          print("adding application to list")
          applications.append(parts[1])
+
+   mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": json.loads(msg.payload)})
 
 
 def on_mqtt_subscribe(client, userdata, mid, qos):

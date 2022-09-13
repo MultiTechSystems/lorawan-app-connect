@@ -1,4 +1,4 @@
-@startuml
+@startuml "network-diagram"
 
 participant "LoRaWAN Device"
 participant "Conduit"
@@ -17,7 +17,9 @@ Conduit -> "MQTT Broker" : Joined
 Conduit -> "MQTT Broker" : Uplink
 "MQTT Broker" -> "Application Server" : Uplink
 
-"LoRaWAN Device" <- Conduit : Downlink
-Conduit <- "MQTT Broker" : Downlink
+
 "MQTT Broker" <- "Application Server" : Downlink
+Conduit <- "MQTT Broker" : Downlink
+"LoRaWAN Device" <- Conduit : Downlink
+
 @enduml

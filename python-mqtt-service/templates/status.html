@@ -10,24 +10,26 @@
 
 
 <script lang="javascript">
-    function schedule_change() {
 
-        var e = document.getElementById("schedule");
-        var value = e.value;
-        var text = e.options[e.selectedIndex].text;
+    function update_mqtt() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+            // console.log(this.responseText);
+            $('#mqtt_table tr').remove();
+            var data = JSON.parse(this.responseText)
 
-        var appeui = document.getElementById("appeui");
-        var gwuuid = document.getElementById("gwuuid")
-        var gweui = document.getElementById("gweui");
-
-        appeui.parentElement.style.display = (text != "AppEUI") ? "none" : "block";
-        gweui.parentElement.style.display = (text != "GwEUI") ? "none" : "block";
-        gwuuid.parentElement.style.display = (text != "GwUUID") ? "none" : "block";
+            for (var msg in data["messages"]) {
+                var message = data["messages"][msg];
+                $('#mqtt_table').append('<tr><td>' + message.topic + '</td><td>' + JSON.stringify(message.payload, null, 1) + '</td></tr>');
+            }
+        }
+        xhttp.open("GET", "/api/mqtt", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send();
     }
 
-    function on_load() {
-        schedule_change();
-    }
+    setInterval(update_mqtt, 5000);
 
 </script>
 {% endblock %}
@@ -41,26 +43,28 @@
             </div>
             <div class="card-block">
 
-        <table>
-            <thead>
-                <tr><th>Topic</th><th>Message</th></tr>
-            </thead>
-            <tbody>
-            {% for message in mqtt_status.messages: %}
-                <tr>
-                    <td>{{ message.topic }}
-                    <td>{{ message.payload }}</td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mqtt_table">
+                        {% for message in mqtt_status.messages: %}
+                        <tr>
+                            <td>{{ message.topic }}
+                            <td>{{ message.payload }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
 
-	</ul>
-    <script>setTimeout(function(){ window.location = '/status'; }, 5000);</script>
+                </ul>
 
-</div>
-</div>
-</div>
+            </div>
+        </div>
+    </div>
 </div>
 
 {% endblock %}

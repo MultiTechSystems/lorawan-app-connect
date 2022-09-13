@@ -45,7 +45,7 @@
             var current = parseFloat($("#input-current").val());
 
             voltage = Math.round(voltage * (256 / 3.3) / 2) & 0xFF;
-            current = Math.round(current/1000 / (3.3/1024)) & 0xFF;
+            current = Math.round(current / 1000 / (3.3 / 1024)) & 0xFF;
             temp = temp < 0 ? (0x80 | Math.abs(temp)) : temp;
 
             console.log("cart size:", cart_size.toString(16).padStart(2, "0"));
@@ -59,9 +59,9 @@
                 + current.toString(16).padStart(2, "0") + temp.toString(16).padStart(2, "0"))
 
         } else if (/LMK V1/i.exec($("#simulate").val())) {
-            var status = parseInt($("#input-pump1").val(),16);
-            status |= parseInt($("#input-pump2").val(),16) << 4;
-            status |= parseInt($("#input-pump3").val(),16) << 8;
+            var status = parseInt($("#input-pump1").val(), 16);
+            status |= parseInt($("#input-pump2").val(), 16) << 4;
+            status |= parseInt($("#input-pump3").val(), 16) << 8;
             var delay = parseInt($("#input-delay").val());
             var temp = parseInt($("#input-temp").val());
 
@@ -223,7 +223,7 @@
                             min: 0,
                             max: 1,
                             stepSize: 1,
-                            callback: function(value, index, ticks) {
+                            callback: function (value, index, ticks) {
                                 return value ? "ON" : "OFF";
                             }
                         }
@@ -293,8 +293,8 @@
                             size: 20,
                         },
                         align: "top",
-                        formatter: function(val) {
-                            return val.toString(2).padStart(4,"0")
+                        formatter: function (val) {
+                            return val.toString(2).padStart(4, "0")
                         },
                         padding: 1,
                     },
@@ -302,7 +302,7 @@
                 scales: {
                     y: {
                         ticks: {
-                            callback: function(value, index, ticks) {
+                            callback: function (value, index, ticks) {
                                 return "0x" + value.toString(16).toUpperCase();
                             }
                         }
@@ -401,86 +401,109 @@
         xhttp.onload = function () {
             // console.log(this.responseText);
             $('#mqtt_table tr').remove();
+            $('#app_messages_table tr').remove();
             var data = JSON.parse(this.responseText)
 
             var first_uplink = false;
             for (var msg in data["messages"]) {
                 var message = data["messages"][msg];
-                if (!first_uplink) {
-                    if (/.*\/up/.exec(message.topic)) {
-                        console.log("found an uplink", message.payload["data"])
-                        deveui = message.topic.split("/")[2];
-                        $("#deveui").text("EUI: " + deveui);
-                        $("#snr_rssi").text("SNR/RSSI: " + message.payload["lsnr"].toString() + " dB / " + message.payload["rssi"].toString() + " dBm");
 
-                        var data_array = [];
-                        var data_str = atob(message.payload["data"]);
-                        for (var i = 0; i < data_str.length; i++)
-                            data_array.push(data_str.charCodeAt(i));
+                if (/.*\/up/.exec(message.topic)) {
+                    console.log("found an uplink", message.payload["data"])
+                    deveui = message.topic.split("/")[2];
 
-                        console.log(data_array);
+                    var rssi = message.payload["rssi"].toString() + " dBm";
+                    var snr = message.payload["lsnr"].toString() + " dB";
 
-                        if (data_array.length == 3) {
-                            console.log("V1 FORMAT");
-                        } else if (data_array.length == 6) {
-                            console.log("LMK FORMAT");
+                    var data_array = [];
+                    var data_str = atob(message.payload["data"]);
+                    for (var i = 0; i < data_str.length; i++)
+                        data_array.push(data_str.charCodeAt(i));
 
+                    console.log(data_array);
+
+                    if (data_array.length == 3) {
+                        console.log("V1 FORMAT");
+                    } else if (data_array.length == 6) {
+                        console.log("LMK FORMAT");
+
+                        $("#cart").text("NA");
+                        $("#shot").text("NA");
+
+                        var cursor = 0;
+                        var version = data_array[cursor];
+                        cursor += 1;
+                        var status = (data_array[cursor] << 8) | data_array[cursor + 1];
+                        cursor += 2;
+                        var delay = (data_array[cursor] << 8) | data_array[cursor + 1];
+                        cursor += 2;
+                        var temp = data_array[cursor];
+                        temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
+                        cursor += 2;
+
+                        if (!first_uplink) {
+                            $("#deveui").text("EUI: " + deveui);
+                            $("#type").text("Type: LMK V1");
+                            $("#snr_rssi").text("SNR/RSSI: " + snr + "/" + rssi);
                             $(".lubricatorv2").hide();
                             $(".lmkv1").show();
-
-                            $("#cart").text("NA");
-                            $("#shot").text("NA");
-                            $("#type").text("Type: LMK V1");
-
-                            var cursor = 0;
-                            var version = data_array[cursor];
-                            cursor += 1;
-                            var status = (data_array[cursor] << 8) | data_array[cursor+1];
-                            cursor += 2;
-                            var delay = (data_array[cursor] << 8) | data_array[cursor+1];
-                            delay = (delay / 60.0).toFixed(2);
-                            cursor += 2;
-                            var temp = data_array[cursor];
-                            temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
-                            cursor += 2;
-
-                            update_chart("delay-level-chart", delay);
+                            update_chart("delay-level-chart", (delay / 60.0).toFixed(2));
                             update_chart("temp-level-chart", temp);
                             update_status_chart("status-level-chart", status);
+                            first_uplink = true;
+                        }
 
-                        } else if (data_array.length == 9) {
-                            console.log("V2 FORMAT")
+                        var msg_data = {
+                            "type": "lmkv1",
+                            "delay": delay,
+                            "status_int": status,
+                            "status": status.toString(2).split(/(.{4})/g).reverse().join(" ").trim(),
+                            "temp": temp,
+                            "rssi": rssi,
+                            "snr": snr
+                        };
 
+                        var date = new Date(message.payload["time"]);
+
+                        $("#app_messages_table").append('<tr><td>' + deveui + '</td><td>' + message.payload["gweui"] + '</td><td title="' + message.payload["time"] + '"">' + date.toString() + '</td><td>' + JSON.stringify(msg_data, null, 5) + '</td></tr>');
+
+                    } else if (data_array.length == 9) {
+                        console.log("V2 FORMAT")
+
+                        // VERSION | CART/SHOT | DELAY (2) | ALARM | LEFT | VOLTAGE | CURRENT | TEMP
+                        var cursor = 0;
+                        var version = data_array[cursor];
+                        cursor += 1;
+                        var cart_shot = data_array[cursor];
+                        cursor += 1;
+
+                        $("#cart").text("Cart Size: " + ((cart_shot & 0x60) == 0x60 ? "500ml" : (cart_shot & 0x40) == 0x40 ? "250ml" : (cart_shot & 0x20) == 0x20 ? "125ml" : "60ml"));
+                        $("#shot").text("Shot Size: " + (cart_shot & 0x0F));
+
+                        var delay = (data_array[cursor] << 8) | data_array[cursor + 1];
+                        delay = (delay / 60.0).toFixed(2);
+                        cursor += 2;
+                        var alarm = data_array[cursor];
+                        cursor += 1;
+                        var level = data_array[cursor];
+                        cursor += 1;
+                        var voltage = data_array[cursor];
+                        voltage = (voltage * (3.3 / 256) * 2).toFixed(2);
+                        cursor += 1;
+                        var current = data_array[cursor];
+                        current = (current * 3.3 / 1024 * 1000).toFixed(2);
+                        cursor += 1;
+                        var temp = data_array[cursor];
+                        temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
+                        cursor += 1;
+                        console.log(version, cart_shot, delay, alarm, level, voltage, current, temp);
+
+                        if (!first_uplink) {
+                            $("#deveui").text("EUI: " + deveui);
+                            $("#type").text("Type: Lubricator V2");
+                            $("#snr_rssi").text("SNR/RSSI: " + snr + "/" + rssi);
                             $(".lubricatorv2").show();
                             $(".lmkv1").hide();
-
-                            // VERSION | CART/SHOT | DELAY (2) | ALARM | LEFT | VOLTAGE | CURRENT | TEMP
-                            var cursor = 0;
-                            var version = data_array[cursor];
-                            cursor += 1;
-                            var cart_shot = data_array[cursor];
-                            cursor += 1;
-
-                            $("#cart").text("Cart Size: " + ((cart_shot & 0x60) == 0x60 ? "500ml" : (cart_shot & 0x40) == 0x40 ? "250ml" : (cart_shot & 0x20) == 0x20 ? "125ml" : "60ml"));
-                            $("#shot").text("Shot Size: " + (cart_shot & 0x0F));
-                            $("#type").text("Type: Lubricator V2");
-                            var delay = (data_array[cursor] << 8) | data_array[cursor+1];
-                            delay = (delay / 60.0).toFixed(2);
-                            cursor += 2;
-                            var alarm = data_array[cursor];
-                            cursor += 1;
-                            var level = data_array[cursor];
-                            cursor += 1;
-                            var voltage = data_array[cursor];
-                            voltage = (voltage * (3.3 / 256) * 2).toFixed(2);
-                            cursor += 1;
-                            var current = data_array[cursor];
-                            current = (current * 3.3/1024 * 1000).toFixed(2);
-                            cursor += 1;
-                            var temp = data_array[cursor];
-                            temp = (temp & 0x80) ? -(temp & ~0x80) : temp;
-                            cursor += 1;
-                            console.log(version, cart_shot, delay, alarm, level, voltage, current, temp);
 
                             update_chart("fluid-level-chart", level);
                             update_chart("delay-level-chart", delay);
@@ -488,9 +511,27 @@
                             update_chart("current-level-chart", current);
                             update_chart("temp-level-chart", temp);
                             update_alarm_chart("alarm-level-chart", alarm);
+                            first_uplink = true;
                         }
-                        first_uplink = true;
+
+                        var msg_data = {
+                            "type": "lubricatorv2",
+                            "level": level,
+                            "delay": delay,
+                            "voltage": voltage,
+                            "current": current,
+                            "temp": temp,
+                            "alarm": alarm,
+                            "rssi": rssi,
+                            "snr": snr
+                        };
+
+
+                        var date = new Date(message.payload["time"]);
+
+                        $("#app_messages_table").append('<tr><td>' + deveui + '</td><td>' + message.payload["gweui"] + '</td><td title="' + message.payload["time"] + '"">' + date.toString() + '</td><td>' + JSON.stringify(msg_data, null, 5) + '</td></tr>');
                     }
+
                 }
                 $('#mqtt_table').append('<tr><td>' + message.topic + '</td><td>' + JSON.stringify(message.payload, null, 1) + '</td></tr>');
             }
@@ -657,7 +698,8 @@
                 </div>
             </div>
         </div>
-        <div class="row">
+
+        <div class="row" style="display:none;">
             <div class="column">
                 <div class="card">
                     <div class="card-title">
@@ -750,11 +792,11 @@
 
                         <div class="input-lmkv1">
                             <label for="input-pump1">Pump 1 (HEX:0-F)</label>
-                            <input type="text" name="input-pump1" id="input-pump1" value="1">
+                            <input type="text" name="input-pump1" id="input-pump1" value="8">
                             <label for="input-pump2">Pump 2 (HEX:0-F)</label>
-                            <input type="text" name="input-pump2" id="input-pump2" value="2">
+                            <input type="text" name="input-pump2" id="input-pump2" value="9">
                             <label for="input-pump3">Pump 3 (HEX:0-F)</label>
-                            <input type="text" name="input-pump3" id="input-pump3" value="3">
+                            <input type="text" name="input-pump3" id="input-pump3" value="A">
                         </div>
                         <div class="row">
                             <div class="column">
@@ -789,6 +831,30 @@
 
                     </fieldset>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+<h5>Application Messages</h5>
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <div class=" card-block">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th width="220px">DevEUI</th>
+                                <th width="220px">GwEUI</th>
+                                <th>Time</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="app_messages_table">
+
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
     </div>
