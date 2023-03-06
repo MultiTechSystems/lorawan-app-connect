@@ -1,0 +1,35 @@
+@startuml "Cloud Decoder"
+
+participant "LoRaWAN Device" as LWD
+participant "Conduit" as CDT
+
+box "AWS Cloud"
+participant "AWS LNS\nSailboat" as MB
+participant "IoT Rules" as IR
+participant "Lambda Decoder" as LD
+participant "Application Server" as AS
+
+end box
+
+MB -> MB : Register Device
+
+LWD -> CDT : Join Request
+CDT -> MB : Join Request
+MB -> AS : Joined
+CDT <- MB : Join Accept
+LWD <- CDT : Join Accept
+
+LWD -> CDT : Uplink
+CDT -> MB : Uplink
+MB -> IR : Uplink
+IR -> LD : Uplink
+LD -> LD : Decode Message
+LD -> AS : Uplink
+
+
+MB <- AS : Downlink Encoded
+CDT <- MB : Downlink
+LWD <- CDT : Downlink
+
+@enduml
+

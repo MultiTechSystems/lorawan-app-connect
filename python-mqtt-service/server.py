@@ -12,6 +12,7 @@ import serial, time
 serial_ports = {}
 
 mqtt_status = {"connected":False, "messages": []}
+MAX_MESSAGES = 1000
 
 devices = []
 gateways = []
@@ -19,7 +20,7 @@ applications = []
 
 def on_mqtt_connect(client, userdata, flags, rc):
    mqtt_status["connected"] = True
-   local_client.subscribe("#")
+   local_client.subscribe("lorawan/#")
 
 def on_mqtt_message(client, userdata, msg):
    print(msg.topic,msg.payload)
@@ -44,16 +45,25 @@ def on_mqtt_message(client, userdata, msg):
       p_json = json.loads(msg.payload)
 
       for gw in p_json["gateways_euis"]:
-         if not gw in gateways:
+         found = False
+         for ch_gw in gateways:
+            if ch_gw[0] == gw:
+               found = True
+               break
+         if not found:
             print("adding gateway_eui to list")
             gateways.append( (gw, uuid.UUID(parts[2])) )
 
       if not parts[1] in applications:
          print("adding application to list")
          applications.append(parts[1])
+   try:
+      mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": json.loads(msg.payload)})
+   except:
+      pass
 
-   mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": json.loads(msg.payload)})
-
+   while (len(mqtt_status['messages']) > MAX_MESSAGES):
+      mqtt_status['messages'].pop()
 
 def on_mqtt_subscribe(client, userdata, mid, qos):
     pass
@@ -173,6 +183,10 @@ def gateway_list():
 @app.route('/application_list',)
 def application_list():
    return render_template("applications.html", title="Applications", applications=applications)
+
+@app.route('/mtb_data_protocol',)
+def mtb_protocol():
+   return render_template("mtb_data_protocol.html", title="MTB Data Protocol", mqtt_status=mqtt_status)
 
 @app.route('/')
 @app.route('/index')

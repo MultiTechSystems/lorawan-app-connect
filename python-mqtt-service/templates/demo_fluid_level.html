@@ -427,9 +427,6 @@
                     } else if (data_array.length == 6) {
                         console.log("LMK FORMAT");
 
-                        $("#cart").text("NA");
-                        $("#shot").text("NA");
-
                         var cursor = 0;
                         var version = data_array[cursor];
                         cursor += 1;
@@ -442,6 +439,9 @@
                         cursor += 2;
 
                         if (!first_uplink) {
+                            $("#cart").text("NA");
+                            $("#shot").text("NA");
+
                             $("#deveui").text("EUI: " + deveui);
                             $("#type").text("Type: LMK V1");
                             $("#snr_rssi").text("SNR/RSSI: " + snr + "/" + rssi);
@@ -477,9 +477,6 @@
                         var cart_shot = data_array[cursor];
                         cursor += 1;
 
-                        $("#cart").text("Cart Size: " + ((cart_shot & 0x60) == 0x60 ? "500ml" : (cart_shot & 0x40) == 0x40 ? "250ml" : (cart_shot & 0x20) == 0x20 ? "125ml" : "60ml"));
-                        $("#shot").text("Shot Size: " + (cart_shot & 0x0F));
-
                         var delay = (data_array[cursor] << 8) | data_array[cursor + 1];
                         delay = (delay / 60.0).toFixed(2);
                         cursor += 2;
@@ -499,6 +496,9 @@
                         console.log(version, cart_shot, delay, alarm, level, voltage, current, temp);
 
                         if (!first_uplink) {
+                            $("#cart").text("Cart Size: " + ((cart_shot & 0x60) == 0x60 ? "500ml" : (cart_shot & 0x40) == 0x40 ? "250ml" : (cart_shot & 0x20) == 0x20 ? "125ml" : "60ml"));
+                            $("#shot").text("Shot Size: " + (cart_shot & 0x0F));
+
                             $("#deveui").text("EUI: " + deveui);
                             $("#type").text("Type: Lubricator V2");
                             $("#snr_rssi").text("SNR/RSSI: " + snr + "/" + rssi);

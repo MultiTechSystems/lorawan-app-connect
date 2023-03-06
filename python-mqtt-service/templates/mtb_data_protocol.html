@@ -1,0 +1,384 @@
+{% extends "base.html" %}
+{% block title %}MTB Data Format{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+</style>
+
+
+<script lang="javascript">
+
+    var deveui = "";
+
+    var ble_devices = {};
+    var sloan_devices = {};
+
+    var mtb_devices = {
+        "00-80-00-00-04-03-97-78": { "init": true },
+        "00-80-00-00-04-03-97-68": { "init": true },
+        "00-80-00-00-04-03-97-6b": { "init": true },
+        "00-80-00-00-04-03-97-XY": { "init": true }
+    };
+
+    function update_mqtt() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+            // console.log(this.responseText);
+            $('#mqtt_table tr').remove();
+            $('#ble_devices_table tr').remove();
+            $('#sloan_devices_table tr').remove();
+            $('#mtb_devices_table tr').remove();
+
+            $('#app_messages_table tr').remove();
+
+            var data = JSON.parse(this.responseText)
+
+            for (mtb_dev in mtb_devices) {
+                mtb_devices[mtb_dev]["init"] = true;
+            }
+
+            var first_uplink = false;
+            for (var msg in data["messages"]) {
+                var message = data["messages"][msg];
+                $('#mqtt_table').append('<tr><td>' + message.topic + '</td><td>' + JSON.stringify(message.payload, null, 1) + '</td></tr>');
+
+
+                if (/.*\/up/.exec(message.topic)) {
+                    deveui = message.topic.split("/")[2];
+
+                    var mac_addr = "";
+                    var rssi = message.payload["rssi"].toString() + " dBm";
+                    var snr = message.payload["lsnr"].toString() + " dB";
+
+                    var data_array = [];
+                    var data_str = atob(message.payload["data"]);
+
+                    for (var i = 0; i < data_str.length; i++)
+                        data_array.push(data_str.charCodeAt(i));
+
+                    var data_hex = "";
+                    for (var i = 0; i < data_array.length; i++)
+                        data_hex += data_array[i].toString(16).padStart(2, "0");
+
+
+                    if (deveui in mtb_devices && message.payload["data"].length > 0) {
+                        var ble_type = "UNKNOWN";
+
+                        if (!("packets" in mtb_devices[deveui])) {
+                            mtb_devices[deveui]["packets"] = [data_hex];
+                        } else {
+                            var found = false;
+                            for (var packet in mtb_devices[deveui]["packets"]) {
+                                if (data_hex.substr(0, 6) == mtb_devices[deveui]["packets"][packet].substr(0, 6))
+                                    mtb_devices[deveui]["packets"][packet] = data_hex;
+                                else
+                                    mtb_devices[deveui]["packets"].push(data_hex)
+                            }
+                        }
+
+                        if (mtb_devices[deveui]["init"]) {
+                            mtb_devices[deveui]["init"] = false;
+                            mtb_devices[deveui]["snr"] = snr;
+                            mtb_devices[deveui]["rssi"] = rssi;
+                            mtb_devices[deveui]["datr"] = message.payload["datr"];
+                            mtb_devices[deveui]["freq"] = message.payload["freq"];
+                            mtb_devices[deveui]["addr"] = message.payload["devaddr"];
+                            mtb_devices[deveui]["seqn"] = message.payload["seqn"];
+                            mtb_devices[deveui]["time"] = message.payload["time"];
+                        }
+
+                        var msg_data = {
+                            "type": "MTB",
+                            "data": message.payload["data"],
+                            "data_hex": data_hex,
+                            "data_size": data_array.length,
+                            "parsed_data": {
+                                "sequence": data_array[0],
+                                "size": data_array[1],
+                                "type": data_array[2],
+                                "ble_data": {
+                                    "crc": data_array[3].toString(16).padStart(2, "0") + data_array[4].toString(16).padStart(2, "0"),
+                                    "length": data_array[5],
+                                    "flags": data_array[6].toString(16).padStart(2, "0"),
+                                    "addr": data_array[7],
+                                    "filter": data_array[8],
+                                    "rssi": -(data_array[9] & ~(0x80))
+                                }
+                            }
+                        };
+
+                        if (/.*534c17ffcd07.*/.exec(data_hex)) {
+                            console.log("Sloan Packet detected");
+                            ble_type = "Sloan";
+
+
+                            var cursor = 23;
+                            var serial_no = data_array[cursor++].toString(16).padStart(2, "0");
+                            serial_no += data_array[cursor++].toString(16).padStart(2, "0");
+                            serial_no += data_array[cursor++].toString(16).padStart(2, "0");
+                            serial_no += data_array[cursor++].toString(16).padStart(2, "0");
+
+                            var battery = 0;
+                            var temperature = 0;
+                            var flushes = 0;
+
+                            var act_water = (data_array[cursor] << 8) + data_array[cursor + 1];
+                            cursor += 2;
+                            var act_water_rollover = data_array[cursor];
+                            cursor += 1;
+                            var type = data_array[cursor];
+                            cursor += 1;
+                            var alerts = data_array[cursor];
+                            cursor += 2;
+                            var security = data_array[cursor];
+
+                            cursor = 35;
+                            var nickname = String.fromCharCode(data_array[cursor++]);
+                            nickname += String.fromCharCode(data_array[cursor++]);
+                            nickname += String.fromCharCode(data_array[cursor++]);
+                            nickname += String.fromCharCode(data_array[cursor++]);
+                            nickname += String.fromCharCode(data_array[cursor++]);
+                            nickname += String.fromCharCode(data_array[cursor++]);
+
+                            var sloan_data = {
+                                "serial_no": serial_no,
+                                "nickname": nickname
+                            };
+
+                            sloan_data[("raw_" + type)] = data_hex.slice(26, data_hex.length);
+                            sloan_data["security_" + type] = "0x" + security.toString(16).padStart(2, "0");
+
+                            switch (type) {
+                                case 0x01:
+                                    // Data Package 1
+                                    // SERIAL (13-16)
+                                    // Activations (17-18)
+                                    // Activation Rollover (19)
+                                    // Package Type 0x01 (20)
+                                    // Alerts 0-7 (21)
+                                    // Registration (22)
+                                    // Battery and Temperature (23-24)
+                                    // Nickname (25-30)
+
+                                    cursor = 33;
+                                    battery = data_array[cursor];
+                                    cursor = 34;
+                                    temperature = data_array[cursor];
+
+                                    sloan_data["activations"] = act_water + (act_water_rollover * 0xFFFF);
+                                    sloan_data["battery"] = battery;
+                                    sloan_data["temperature"] = temperature;
+                                    sloan_data["alerts_1"] = "0x" + alerts.toString(16).padStart(2, "0");
+
+                                    break;
+
+                                case 0x02:
+                                    // Data Package 2
+                                    // SERIAL (13-16)
+                                    // Water Usage (17-18)
+                                    // Water Rollover (19)
+                                    // Package Type 0x02 (20)
+                                    // Alerts 8-15 (21)
+                                    // Registration (22)
+                                    // Number of Line Flushes (23-24)
+                                    // Nickname (25-30)
+
+                                    cursor = 33;
+                                    flushes = (data_array[cursor] << 8) + data_array[cursor + 1];
+
+                                    sloan_data["water"] = act_water + (act_water_rollover * 0xFFFF);
+                                    sloan_data["line_flushes"] = flushes;
+
+                                    sloan_data["alerts_2"] = "0x" + alerts.toString(16).padStart(2, "0");
+                                    break;
+
+                                default:
+                                    break;
+                            }
+
+                            msg_data["parsed_data"]["sloan_data"] = sloan_data;
+
+                            if (serial_no in sloan_devices)
+                                sloan_devices[serial_no] = Object.assign(sloan_devices[serial_no], sloan_data);
+                            else
+                                sloan_devices[serial_no] = sloan_data;
+
+
+                            if (!("rssi" in sloan_devices[serial_no]))
+                                sloan_devices[serial_no]["rssi"] = rssi;
+                            if (!("snr" in sloan_devices[serial_no]))
+                                sloan_devices[serial_no]["snr"] = snr;
+
+                            console.log(sloan_devices);
+
+
+
+                        } else if (/.*020106.*/.exec(data_hex) && data_array.length == 41) {
+                            console.log("B&D Packet detected");
+                            ble_type = "B&D";
+
+                            var start = (data_hex.indexOf("020106") + 24) / 2;
+                            console.log(start);
+
+                            for (var i = 0; i < 6; i++) {
+                                mac_addr += data_array[start + i].toString(16).padStart(2, "0");
+                            }
+                            msg_data["parsed_data"]["mac_addr"] = mac_addr;
+                        }
+
+                        msg_data["ble_type"] = ble_type;
+
+                        if (mac_addr != "") {
+                            var rssi_value = msg_data["parsed_data"]["ble_data"]["rssi"];
+                            if (!ble_devices.hasOwnProperty(mac_addr)) {
+                                console.log("update ble_devices mac:", mac_addr, " rssi:", msg_data["parsed_data"]["ble_data"]["rssi"]);
+                                ble_devices[mac_addr] = [rssi_value];
+                            } else if (ble_devices[mac_addr][ble_devices[mac_addr].length - 1] != rssi_value) {
+                                ble_devices[mac_addr].push(rssi_value);
+                            }
+                        }
+
+                        var date = new Date(message.payload["time"]);
+
+                        $("#app_messages_table").append('<tr><td>' + deveui + '</td><td>' + message.payload["gweui"] + '</td><td title="' + message.payload["time"] + '"">' + date.toString() + '</td><td>' + JSON.stringify(msg_data, null, 5) + '</td></tr>');
+                    }
+                }
+            }
+
+            console.log("BLE", ble_devices);
+            for (ble_dev in ble_devices) {
+                if (ble_devices.hasOwnProperty(ble_dev))
+                    $("#ble_devices_table").append('<tr><td>' + ble_dev + '</td><td>' + JSON.stringify(ble_devices[ble_dev], null, 1) + '</td></tr>')
+            }
+
+            console.log("SLOAN", sloan_devices);
+            for (serial_no in sloan_devices) {
+                if (sloan_devices.hasOwnProperty(serial_no))
+                    $("#sloan_devices_table").append("<tr><td><a style=\"cursor:pointer\" onclick=\"selectDevice(\'" + serial_no + "\'); return false;\">" + serial_no + '</a> (' + sloan_devices[serial_no]["nickname"] + ')</td><td>' + JSON.stringify(sloan_devices[serial_no], null, 1) + '</td></tr>')
+            }
+
+            for (mtb_dev in mtb_devices) {
+                if (mtb_devices.hasOwnProperty(mtb_dev))
+                    $("#mtb_devices_table").append('<tr><td>' + mtb_dev + '</td><td>' + JSON.stringify(mtb_devices[mtb_dev]) + '</td></tr>')
+            }
+        }
+        xhttp.open("GET", "/api/mqtt", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send();
+    }
+
+    setInterval(update_mqtt, 5000);
+
+</script>
+{% endblock %}
+{% block content %}
+<h5>MTB Meta-data</h5>
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <div class=" card-block">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th width="220px">EUI</th>
+                                <th width="220px">Last LoRa Info</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mtb_devices_table">
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h5>BLE Device Data</h5>
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <div class=" card-block">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th width="220px">MAC Addr</th>
+                                <th>Packets</th>
+                            </tr>
+                        </thead>
+                        <tbody id="ble_devices_table">
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<h5>Application Messages (<a
+        href="https://multitech.atlassian.net/wiki/spaces/MBE/pages/2400977174/LoRa+Data+Format">LoRa Data Format</a>)
+</h5>
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <div class=" card-block">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th width="220px">DevEUI</th>
+                                <th width="220px">GwEUI</th>
+                                <th>Time</th>
+                                <th>Message</th>
+                            </tr>
+                        </thead>
+                        <tbody id="app_messages_table">
+
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row grid-responsive">
+    <div class="column">
+        <div class="card">
+            <div class="card-title">
+                <h3>MQTT Connected: {{ mqtt_status.connected }}</h3>
+            </div>
+            <div class="card-block">
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Topic</th>
+                            <th>Message</th>
+                        </tr>
+                    </thead>
+                    <tbody id="mqtt_table">
+                        {% for message in mqtt_status.messages: %}
+                        <tr>
+                            <td>{{ message.topic }}
+                            <td>{{ message.payload }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                </ul>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

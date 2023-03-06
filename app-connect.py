@@ -326,9 +326,12 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
 
         if flags["session present"] == False:
             # resubscribe for downlinks
-            stream = os.popen('lora-query -x session list json')
-            output = stream.read()
-            dev_list = json.loads(output)
+            query = os.popen('lora-query -x session list json file /tmp/sessions.json')
+            query.read()
+            file = open('/tmp/sessions.json',mode='r')
+            dev_list = json.loads(file.read())
+            file.close()
+            query.close()
 
             for dev in dev_list:
                 if dev["appeui"] in apps and userdata["eui"] == dev["appeui"]:
@@ -499,6 +502,7 @@ def on_mqtt_message(client, userdata, msg):
         if appeui not in apps:
             stream = os.popen('lora-query -x appnet get ' + appeui)
             output = stream.read()
+            stream.close()
             logging.info(output)
             app_data = json.loads(output)
 
@@ -680,11 +684,13 @@ local_client.connect("127.0.0.1", 1883, 60)
 
 stream = os.popen('cat /sys/devices/platform/mts-io/uuid')
 gw_uuid = stream.read()
+stream.close()
 gw_uuid = gw_uuid[:-1]
 
 
 stream = os.popen('lora-query -x config  | jsparser --jsobj --path defaultApp')
 output = stream.read()
+stream.close()
 
 try:
     default_app = json.loads(output)
@@ -696,6 +702,7 @@ except ValueError:
 
 stream = os.popen('lora-query -x gateways list json')
 output = stream.read()
+stream.close()
 
 try:
     gw_list = json.loads(output)
@@ -715,6 +722,7 @@ if "enabled" in default_app and default_app["enabled"]:
 
 stream = os.popen('lora-query -x appnet list json')
 output = stream.read()
+stream.close()
 app_list = json.loads(output)
 
 for app in app_list:
@@ -741,9 +749,12 @@ def compare_apps(app1, app2):
 
     return True
 
-stream = os.popen('lora-query -x session list json')
-output = stream.read()
-dev_list = json.loads(output)
+query = os.popen('lora-query -x session list json file /tmp/sessions.json')
+query.read()
+file = open('/tmp/sessions.json',mode='r')
+dev_list = json.loads(file.read())
+file.close()
+query.close()
 
 for dev in dev_list:
     if dev["appeui"] in apps:
@@ -784,6 +795,8 @@ while run:
         # refresh the app list in case of changes
         stream = os.popen('lora-query -x appnet list json')
         output = stream.read()
+        stream.close()
+
         try:
             test_app_list = json.loads(output)
         except ValueError:
