@@ -1,0 +1,302 @@
+{% extends "base.html" %}
+{% block title %}MQTT Command Demo{% endblock %}
+{% block head %}
+{{ super() }}
+<style type="text/css">
+    .important {
+        color: #336699;
+    }
+</style>
+
+<script lang="javascript">
+
+
+    function send_command() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+            document.getElementById("command_response").innerHTML = "WAITING..."
+            var timeout = 2000;
+
+            if (document.getElementById("command_type").value == "lora_req" || /lora/.exec(document.getElementById("command").value)) {
+                timeout = 5000;
+            }
+
+            setTimeout(update_mqtt, timeout);
+        }
+        xhttp.open("POST", "api/mqtt_command", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        if (document.getElementById("command_type").value == "lora_req") {
+            xhttp.send(JSON.stringify({
+                "appeui": document.getElementById("appeui").value,
+                "gwuuid": document.getElementById("gwuuid").value,
+                "type": document.getElementById("command_type").value,
+                "command": document.getElementById("command").value + (document.getElementById("command_data").value == "" ? "" : " '" + document.getElementById("command_data").value + "'")
+            }));
+        } else if (document.getElementById("command_type").value == "api_req") {
+            xhttp.send(JSON.stringify({
+                "appeui": document.getElementById("appeui").value,
+                "gwuuid": document.getElementById("gwuuid").value,
+                "type": document.getElementById("command_type").value,
+                "method": document.getElementById("command_method").value,
+                "path": document.getElementById("command").value,
+                "body": document.getElementById("command_data").value
+            }));
+        } else if (document.getElementById("command_type").value == "log_req") {
+            xhttp.send(JSON.stringify({
+                "appeui": document.getElementById("appeui").value,
+                "gwuuid": document.getElementById("gwuuid").value,
+                "type": document.getElementById("command_type").value,
+                "file": document.getElementById("command").value,
+                "lines": document.getElementById("command_log_lines").value
+            }));
+        }
+    }
+
+    function update_mqtt() {
+        console.log("sending http request")
+        const xhttp = new XMLHttpRequest();
+        xhttp.onload = function () {
+
+            var data = JSON.parse(this.responseText)
+
+            for (var msg in data["messages"]) {
+                var message = data["messages"][msg];
+                var cmd_type = document.getElementById("command_type").value.replace("req", "res");
+                if (message.topic.split("/")[3] == cmd_type) {
+                    if (document.getElementById("command_type").value == "log_req") {
+                        document.getElementById("command_response").innerHTML = message.payload.result;
+                    } else if (document.getElementById("command_type").value == "lora_req") {
+                        if (message.payload["result"] != null)
+                            document.getElementById("command_response").innerHTML = message.payload.result
+                        else
+                            document.getElementById("command_response").innerHTML = JSON.stringify(message.payload, null, 2);
+                    } else if (document.getElementById("command_type").value == "api_req") {
+                        document.getElementById("command_response").innerHTML = JSON.stringify(message.payload, null, 2);
+                    }
+                }
+            }
+        }
+
+        xhttp.open("GET", "/api/mqtt_command", true);
+        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+        xhttp.send();
+    }
+
+    function command_type_change() {
+        var command_type = document.getElementById("command_type").value;
+        var command_method = document.getElementById("command_method");
+        var command_log_lines = document.getElementById("command_log_lines");
+        var command_data = document.getElementById("command_data");
+        var command_label = document.getElementById("command_label");
+        var command = document.getElementById("command");
+
+        command_method.parentElement.style.display = (command_type != "api_req") ? "none" : "block";
+        command_log_lines.parentElement.style.display = (command_type != "log_req") ? "none" : "block";
+        command_data.parentElement.style.display = (command_type == "log_req") ? "none" : "block";
+        if (command_type == "log_req") {
+            command_label.innerHTML = "File Name";
+            command.value = "/var/log/messages";
+        }
+        if (command_type == "api_req") {
+            command_label.innerHTML = "Path";
+            command.value = "/api/system";
+            document.getElementById("command_method").value = "GET";
+        }
+        if (command_type == "lora_req") {
+            command_label.innerHTML = "Command";
+            command.value = "device list json";
+        }
+
+    }
+
+</script>
+
+{% endblock %}
+{% block content %}
+
+<div class="row grid-responsive">
+    <div class="column column-60">
+        <div class="card">
+            <div class="card-title">
+                <h3>Send MQTT Command</h3>
+            </div>
+            <div class="card-block">
+                <form action="javascript:void(0);">
+                    <fieldset>
+                        <div class="row grid-responsive">
+                            <div class="column column-50">
+                                <div style="display:block;">
+                                    <label for="appeui">AppEUI</label> <select name="appeui" id="appeui">
+                                        {% for app in applications: %}
+                                        <option>{{app}}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="column column-50">
+                                <div>
+                                    <label>Gateway</label> <select name="gwuuid" id="gwuuid">
+                                        {% for eui, uuid in gateways: %}
+                                        <option value="{{uuid}}">{{ uuid }} - {{ eui }}</option>
+                                        {% endfor %}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="row grid-responsive">
+                            <div class="column column-50">
+                                <div>
+                                    <label>Command Type</label>
+                                    <select name="command_type" id="command_type" onchange="command_type_change()">
+                                        <option value="api_req">API Request</option>
+                                        <option value="lora_req">LoRa Query Request</option>
+                                        <option value="log_req">Log Request</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="column column-50">
+                                <div>
+                                    <label>API Method</label>
+                                    <select name="command_method" id="command_method">
+                                        <option>GET</option>
+                                        <option>PUT</option>
+                                        <option>POST</option>
+                                        <option>DELETE</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <label for="command" id="command_label">Path</label>
+                            <input type="text" name="command" id="command" value="/api/system">
+                        </div>
+                        <div>
+                            <label for="command_data">Data</label>
+                            <textarea name="command_data" id="command_data" rows="10"
+                                style="min-height:100px"></textarea>
+                        </div>
+                        <div style="display:none;">
+                            <label for="command_data">Log Lines</label>
+                            <input type="text" name="command_log_lines" id="command_log_lines" value="50"></input>
+                        </div>
+                        <br>
+                        <input class="button-primary" type="button" value="Send Command" onclick="send_command()">
+                    </fieldset>
+                </form>
+            </div>
+            <div class="card-title">
+                <h3>Command Response</h3>
+            </div>
+            <div class="card-block">
+                <pre name="command_response" id="command_response">
+
+                </pre>
+            </div>
+            <br>
+        </div>
+    </div>
+
+    <div class="column column-40">
+        <div class="card">
+            <div class="card-title">
+                <h3>Command Reference</h3>
+            </div>
+            <div class="card-block">
+                <div>
+                    <a target="_blank"
+                        href="https://www.multitech.net/developer/software/mtr-software/mtr-api-reference/collection-endpoints/">API
+                        End
+                        Points</a>
+                </div>
+                <div>
+                    <label>Examples</label>
+                    <textarea style="min-height:200px">
+GET /api/system
+GET /api/waninfo
+GET /api/loraNetwork
+GET /api/loraNetwork/lora
+GET /api/loraNetwork/lora/channelPlan
+PUT /api/loraNetwork/lora
+{
+    "channelPlan": "US915"
+}
+GET /api/loraNetwork/packetForwarder
+GET /api/loraNetwork/basicStation
+GET /api/loraNetwork/defaultApp
+GET /api/loraNetwork/whitelist
+POST /api/loraNetwork/whitelist/devices
+{
+    "appeui": "0011225544556677",
+    "appkey": "00112233445566770011223344556677",
+    "class": "A",
+    "deveui": "0011223554556679",
+    "device_profile_id": "LW102-OTA-US915",
+    "network_profile_id": "DEFAULT-CLASS-A"
+}
+GET /api/lora/config
+GET /api/lora/status
+GET /api/lora/versions
+GET /api/lora/devices
+GET /api/lora/gateways
+GET /api/lora/packets
+GET /api/lora/packets/queue
+POST /api/lora/packets/queue
+{
+    "deveui": "00-80-00-ff-00-00-00-03",
+    "data": "QA=="
+}
+DELETE /api/lora/packets/queue/{DEV-EUI}
+DELETE /api/lora/packets/queue/{DEV-EUI}/{ID}
+GET /api/lora/joinRequests
+GET /api/lora/packets/recent
+POST /api/lora/restart
+POST /api/command/restart
+                    </textarea>
+                </div>
+                <div>
+                    <a target="_blank"
+                        href="https://www.multitech.net/developer/software/lora/lora-network-server/">Lora
+                        Query</a>
+                </div>
+                <div>
+                    <label>Examples</label>
+                    <textarea style="min-height:200px">
+help
+device list json
+packet queue
+packet queue list json
+packet queue add
+{
+    "deveui": "00-80-00-ff-00-00-00-03",
+    "data": "QA=="
+}
+                    </textarea>
+                </div>
+                <div>
+                    <label>Log Files</label>
+                    <textarea style="min-height:200px">
+/var/log/messages
+/var/log/boot
+/var/log/boot
+/var/log/cron
+/var/log/dmesg
+/var/log/lastlog
+/var/log/ppp_trace
+/var/log/secure
+/var/log/api.log
+/var/log/lora-pkt-fwd-1.log
+/var/log/dnsmasq.log
+/var/log/mosquitto.log
+/var/log/lora-lens-server.log
+/var/log/station.log
+/var/log/lora-network-server.log
+/var/log/wan-manager.log</textarea>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}

@@ -86,6 +86,8 @@ local_client.connect(mqtt_server, mqtt_port, 60)
 
 local_client.loop_start()
 
+DOT_PORT = "/dev/ttyACM2"
+
 def open_serial_port(portname):
    global serial_ports
 
@@ -99,7 +101,7 @@ def open_serial_port(portname):
    )
    serial_ports[portname]["response"] = []
 
-open_serial_port("/dev/ttyACM3")
+open_serial_port(DOT_PORT)
 
 app = Flask(__name__)
 
@@ -141,7 +143,7 @@ def device(eui):
       data = json.loads(request.data)
       print(data)
 
-      portname = "/dev/ttyACM3"
+      portname = DOT_PORT
       command = (data["command"]+"\r\n").encode('utf-8')
       serial_ports[portname]["device"].write(command)
 
@@ -180,6 +182,10 @@ def demo_custom():
 def gateway_list():
    return render_template("gateways.html", title="Gateways", gateways=gateways)
 
+@app.route('/mqtt_commands',)
+def mqtt_commands():
+   return render_template("mqtt_commands.html", title="MQTT Commands", gateways=gateways, applications=applications)
+
 @app.route('/application_list',)
 def application_list():
    return render_template("applications.html", title="Applications", applications=applications)
@@ -213,6 +219,35 @@ def api_application(eui):
       pass
    else:
       return json.dumps(applications)
+
+@app.route('/api/mqtt_command', methods = ['GET', 'POST'])
+def api_mqtt_command():
+   if request.method == 'POST':
+      data = json.loads(request.data)
+      print(data)
+
+      message_data = {}
+
+      if (data["type"] == "lora_req"):
+         message_data["command"] = data["command"]
+      elif (data["type"] == "api_req"):
+         message_data["method"] = data["method"]
+         message_data["path"] = data["path"]
+         message_data["body"] = data["body"]
+      elif (data["type"] == "log_req"):
+         message_data["file"] = data["file"]
+         if ("lines" in data):
+            message_data["lines"] = data["lines"]
+         else:
+            message_data["lines"] = 50
+
+
+      local_client.publish("lorawan/" + data["appeui"] + "/" + data["gwuuid"].replace("-", "").upper() +  "/" + data["type"], json.dumps(message_data))
+
+      return json.dumps({ "code": 200, "status": "success" })
+   else:
+      return json.dumps({"messages":mqtt_status["messages"][-10::-1]})
+
 
 @app.route('/api/mqtt', methods = ['GET', 'POST'])
 def api_mqtt():
