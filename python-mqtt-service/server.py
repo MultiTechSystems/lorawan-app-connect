@@ -236,6 +236,7 @@ def api_mqtt_command():
          message_data["body"] = data["body"]
       elif (data["type"] == "log_req"):
          message_data["file"] = data["file"]
+         message_data["filter"] = data["filter"]
          if ("lines" in data):
             message_data["lines"] = data["lines"]
          else:

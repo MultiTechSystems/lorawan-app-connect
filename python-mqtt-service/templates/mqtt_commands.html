@@ -48,6 +48,7 @@
                 "gwuuid": document.getElementById("gwuuid").value,
                 "type": document.getElementById("command_type").value,
                 "file": document.getElementById("command").value,
+                "filter": document.getElementById("filter").value,
                 "lines": document.getElementById("command_log_lines").value
             }));
         }
@@ -90,9 +91,11 @@
         var command_data = document.getElementById("command_data");
         var command_label = document.getElementById("command_label");
         var command = document.getElementById("command");
+        var filter = document.getElementById("filter");
 
         command_method.parentElement.style.display = (command_type != "api_req") ? "none" : "block";
         command_log_lines.parentElement.style.display = (command_type != "log_req") ? "none" : "block";
+        filter.parentElement.style.display = (command_type != "log_req") ? "none" : "block";
         command_data.parentElement.style.display = (command_type == "log_req") ? "none" : "block";
         if (command_type == "log_req") {
             command_label.innerHTML = "File Name";
@@ -180,6 +183,10 @@
                             <label for="command_data">Log Lines</label>
                             <input type="text" name="command_log_lines" id="command_log_lines" value="50"></input>
                         </div>
+                        <div style="display:none;">
+                            <label for="command_data">Filter</label>
+                            <input type="text" name="filter" id="filter"></input>
+                        </div>
                         <br>
                         <input class="button-primary" type="button" value="Send Command" onclick="send_command()">
                     </fieldset>
@@ -213,6 +220,18 @@
                     <label>Examples</label>
                     <textarea style="min-height:200px">
 GET /api/system
+GET /api/system/dbDirty
+POST /api/command/save
+POST /api/command/save_restart
+POST /api/command/restart
+POST /api/lora/restart
+
+GET /api/status
+GET /api/status/gps
+GET /api/status/memory
+GET /api/status/storage
+GET /api/status/lan0
+
 GET /api/waninfo
 GET /api/loraNetwork
 GET /api/loraNetwork/lora
@@ -224,6 +243,10 @@ PUT /api/loraNetwork/lora
 GET /api/loraNetwork/packetForwarder
 GET /api/loraNetwork/basicStation
 GET /api/loraNetwork/defaultApp
+GET /api/lora/config
+GET /api/lora/status
+GET /api/lora/versions
+
 GET /api/loraNetwork/whitelist
 POST /api/loraNetwork/whitelist/devices
 {
@@ -234,12 +257,18 @@ POST /api/loraNetwork/whitelist/devices
     "device_profile_id": "LW102-OTA-US915",
     "network_profile_id": "DEFAULT-CLASS-A"
 }
-GET /api/lora/config
-GET /api/lora/status
-GET /api/lora/versions
+
+GET /api/lora/devices/count
+GET /api/lora/devices/page/0
 GET /api/lora/devices
+GET /api/lora/sessions/count
+GET /api/lora/sessions/page/0
+
 GET /api/lora/gateways
 GET /api/lora/packets
+GET /api/lora/joinRequests
+GET /api/lora/packets/recent
+
 GET /api/lora/packets/queue
 POST /api/lora/packets/queue
 {
@@ -248,10 +277,8 @@ POST /api/lora/packets/queue
 }
 DELETE /api/lora/packets/queue/{DEV-EUI}
 DELETE /api/lora/packets/queue/{DEV-EUI}/{ID}
-GET /api/lora/joinRequests
-GET /api/lora/packets/recent
-POST /api/lora/restart
-POST /api/command/restart
+
+
                     </textarea>
                 </div>
                 <div>
@@ -263,7 +290,14 @@ POST /api/command/restart
                     <label>Examples</label>
                     <textarea style="min-height:200px">
 help
+device count
 device list json
+device list json page 0
+device list json page 1
+session count
+session list json
+session list json page 0
+
 packet queue
 packet queue list json
 packet queue add
@@ -277,7 +311,6 @@ packet queue add
                     <label>Log Files</label>
                     <textarea style="min-height:200px">
 /var/log/messages
-/var/log/boot
 /var/log/boot
 /var/log/cron
 /var/log/dmesg
