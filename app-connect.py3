@@ -356,6 +356,47 @@ def setup_app(app_net):
         raise e
 
 
+def mqtt_subscribe_to_app_topics(appeui):
+    if "cloudService" in apps[appeui]["options"] and apps[appeui]["options"]["cloudService"] == "AZURE":
+        topic = apps[appeui]["options"]["downlinkTopic"] % apps[appeui]["options"]
+        logging.debug("subscribe for app messages: %s", topic)
+        mqtt_clients[appeui].subscribe(str(topic), 1)
+        mqtt_clients[appeui].subscribe("$iothub/methods/POST/#", 1)
+        return
+
+    for dev in dev_list:
+        if dev["appeui"] in apps and appeui == dev["appeui"]:
+            if apps[appeui]["isMqtt"] and appeui in mqtt_clients:
+
+                if default_app["options"]["overrideTopicsForAllApps"]:
+                    topic = default_app["options"]["downlinkTopic"] % dev
+                    logging.debug("subscribe for app messages: %s", topic)
+                    mqtt_clients[appeui].subscribe(str(topic), 1)
+                elif "downlinkTopic" in apps[appeui]["options"]:
+                    topic = apps[appeui]["options"]["downlinkTopic"] % dev
+                    logging.debug("subscribe for app messages: %s", topic)
+                    mqtt_clients[appeui].subscribe(str(topic), 1)
+
+                topic = app_mqtt_subscribe_topic % ( appeui, dev["deveui"] )
+                logging.debug("subscribe for app messages: %s", topic)
+                mqtt_clients[appeui].subscribe(str(topic), 1)
+
+                topic = app_mqtt_subscribe_topic % ( gw_uuid, dev["deveui"] )
+                logging.debug("subscribe for app messages: %s", topic)
+                mqtt_clients[appeui].subscribe(str(topic), 1)
+
+                topic = app_mqtt_subscribe_topic % ( appeui, gw_uuid )
+                logging.debug("subscribe for app messages: %s", topic)
+                mqtt_clients[appeui].subscribe(str(topic), 1)
+
+                for gw in gateways:
+                    topic = app_mqtt_downlink_topic % ( gw, dev["deveui"] )
+                    logging.debug("subscribe for downlinks: %s", topic)
+                    mqtt_clients[appeui].subscribe(str(topic), 1)
+
+                    topic = app_mqtt_clear_topic % ( gw, dev["deveui"] )
+                    logging.debug("subscribe for queue clear: %s", topic)
+                    mqtt_clients[appeui].subscribe(str(topic), 1)
 
 def on_mqtt_app_connect(client, userdata, flags, rc):
     global gateways
@@ -384,46 +425,7 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
             file.close()
             query.close()
 
-            if "cloudService" in apps[userdata["eui"]]["options"] and apps[userdata["eui"]]["options"]["cloudService"] == "AZURE" and apps[userdata["eui"]]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                topic = apps[userdata["eui"]]["options"]["downlinkTopic"] % apps[userdata["eui"]]["options"]
-                logging.debug("subscribe for app messages: %s", topic)
-                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-                mqtt_clients[dev["appeui"]].subscribe("$iothub/methods/POST/#", 1)
-                return
-
-            for dev in dev_list:
-                if dev["appeui"] in apps and userdata["eui"] == dev["appeui"]:
-                    if apps[dev["appeui"]]["isMqtt"] and dev["appeui"] in mqtt_clients:
-
-                        if default_app["options"]["overrideTopicsForAllApps"] and default_app["options"]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                            topic = default_app["options"]["downlinkTopic"] % dev
-                            logging.debug("subscribe for app messages: %s", topic)
-                            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-                        elif "downlinkTopic" in apps[dev["appeui"]]["options"] and apps[dev["appeui"]]["options"]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                            topic = apps[dev["appeui"]]["options"]["downlinkTopic"] % dev
-                            logging.debug("subscribe for app messages: %s", topic)
-                            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                        topic = app_mqtt_subscribe_topic % ( appeui, dev["deveui"] )
-                        logging.debug("subscribe for app messages: %s", topic)
-                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                        topic = app_mqtt_subscribe_topic % ( gw_uuid, dev["deveui"] )
-                        logging.debug("subscribe for app messages: %s", topic)
-                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                        topic = app_mqtt_subscribe_topic % ( appeui, gw_uuid )
-                        logging.debug("subscribe for app messages: %s", topic)
-                        mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                        for gw in gateways:
-                            topic = app_mqtt_downlink_topic % ( gw, dev["deveui"] )
-                            logging.v("subscribe for downlinks: %s", topic)
-                            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                            topic = app_mqtt_clear_topic % ( gw, dev["deveui"] )
-                            logging.debug("subscribe for queue clear: %s", topic)
-                            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+            mqtt_subscribe_to_app_topics(userdata["eui"])
 
 def on_mqtt_app_message(client, userdata, msg):
     global local_client
@@ -442,7 +444,7 @@ def on_mqtt_app_message(client, userdata, msg):
 
     if default_app["options"]["cloudService"] == "AZURE" and "$iothub/methods" in msg.topic:
         logging.debug("Direct Method from AZURE")
-        # get event from topic
+        # get event from topic, direct methods: lora_req, api_req, log_req, downlink
         # $iothub/methods/POST/#
         # example received topic: $iothub/methods/POST/api_req/?rid=1
         # response sent to: $iothub/methods/res/0/?rid=1
@@ -558,11 +560,15 @@ def app_log_query_request(app, msg):
         output = "command rejected, no semi-colons or '..' allowed"
 
 
-    data = json.dumps({"result": output})
+    if "rid" in json_obj:
+        data = json.dumps({"result": output, "rid": json_obj["rid"]})
+    else:
+        data = json.dumps({"result": output})
     if "cloudService" in app["options"] and app["options"]["cloudService"] == "AZURE":
         #app_publish_msg(app, default_app["options"]["uplinkTopic"], data)
         app_publish_msg(app, "$iothub/methods/res/0/?$rid=" + json_obj["rid"], data)
     else:
+
         app_publish_msg(app, app_mqtt_log_result_topic % (app["eui"], gw_uuid), data)
 
 
@@ -578,8 +584,8 @@ def app_lora_query_request(app, msg):
 
     try:
         # try to parse as json
-        json.loads(output)
-        data = output
+        json_data = json.loads(output)
+        data = json.dumps({"result": json_data})
     except:
         data = json.dumps({"result": output})
 
@@ -587,6 +593,10 @@ def app_lora_query_request(app, msg):
         # app_publish_msg(app, default_app["options"]["uplinkTopic"], data)
         app_publish_msg(app, "$iothub/methods/res/0/?$rid=" + json_obj["rid"], data)
     else:
+        if "rid" in json_obj:
+            json_data = json.loads(data)
+            json_data["rid"] = json_obj["rid"]
+            data = json.dumps(json_data)
         app_publish_msg(app, app_mqtt_lora_result_topic % (app["eui"], gw_uuid), data)
 
 def app_api_request(app, msg):
@@ -625,6 +635,11 @@ def app_api_request(app, msg):
         # app_publish_msg(app, default_app["options"]["uplinkTopic"], data)
         app_publish_msg(app, "$iothub/methods/res/0/?$rid=" + json_obj["rid"], data)
     else:
+        if "rid" in json_obj:
+            json_data = json.loads(data)
+            json_data["rid"] = json_obj["rid"]
+            data = json.dumps(json_data)
+
         app_publish_msg(app, app_mqtt_api_result_topic % (app["eui"], gw_uuid), data)
 
 def app_schedule_downlink(app, deveui, msg):
@@ -798,38 +813,7 @@ def on_mqtt_message(client, userdata, msg):
                 setup_app(app_data)
 
         if apps[appeui]["isMqtt"]:
-            if "cloudService" in apps[appeui]["options"] and apps[appeui]["options"]["cloudService"] == "AZURE" and apps[appeui]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                # already subscribed for downlinks?
-                topic =  apps[appeui]["options"]["downlinkTopic"] % { "appeui": appeui, "deveui": deveui, "client_id":  apps[appeui]["options"]["client_id"] }
-                logging.debug("subscribe for app messages: %s", topic)
-                mqtt_clients[appeui].subscribe(str(topic), 1)
-                mqtt_clients[appeui].subscribe("$iothub/methods/POST/#", 1)
-                return
-            elif "downlinkTopic" in apps[appeui]["options"] and apps[appeui]["options"]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                topic = apps[appeui]["options"]["downlinkTopic"] % { "appeui": appeui, "deveui": deveui }
-                logging.debug("subscribe for app messages: %s", topic)
-                mqtt_clients[appeui].subscribe(str(topic), 1)
-
-            topic = app_mqtt_subscribe_topic % ( appeui, deveui )
-            logging.debug("subscribe for app messages: %s", topic)
-            mqtt_clients[appeui].subscribe(str(topic), 1)
-
-            topic = app_mqtt_subscribe_topic % ( gw_uuid, deveui )
-            logging.debug("subscribe for app messages: %s", topic)
-            mqtt_clients[appeui].subscribe(str(topic), 1)
-
-            topic = app_mqtt_subscribe_topic % ( appeui, gw_uuid )
-            logging.debug("subscribe for app messages: %s", topic)
-            mqtt_clients[appeui].subscribe(str(topic), 1)
-
-            for gw in gateways:
-                topic = app_mqtt_downlink_topic % ( gw, deveui )
-                logging.debug("subscribe for downlinks: %s", topic)
-                mqtt_clients[appeui].subscribe(str(topic), 1)
-
-                topic = app_mqtt_clear_topic % ( gw, deveui )
-                logging.debug("subscribe for queue clear: %s", topic)
-                mqtt_clients[appeui].subscribe(str(topic), 1)
+            mqtt_subscribe_to_app_topics(appeui)
 
             # Azure will disconnect if unauthorized topics are published
             if not "cloudService" in apps[appeui]["options"] or apps[appeui]["options"]["cloudService"] != "AZURE":
@@ -853,11 +837,15 @@ def on_mqtt_message(client, userdata, msg):
                 if apps[appeui]["disconnected_flag"] == True:
                     # schedule downlink with backhaul down message default port: 1 data: 0xFF ("/w==") payload
                     # downlink should be scheduled only once per X (default:10) minutes to avoid causing data-pending flag to be set and infinite uplinks from end-device
+                    backhaul_detect_enabled = False
                     backhaul_timeout = 600
                     backhaul_port = 1
                     backhaul_payload = "/w=="
 
                     if "backhaulDetect" in default_app:
+                        if "enabled" in default_app["backhaulDetect"]:
+                            backhaul_detect_enabled = default_app["backhaulDetect"]["enabled"]
+
                         if "timeout" in default_app["backhaulDetect"]:
                             backhaul_timeout = default_app["backhaulDetect"]["timeout"]
 
@@ -867,12 +855,13 @@ def on_mqtt_message(client, userdata, msg):
                         if "payload" in default_app["backhaulDetect"]:
                             backhaul_payload = b64encode(bytes.fromhex(default_app["backhaulDetect"]["payload"])).decode()
 
-                    cur_epoc_time = int(time.time())
-                    if deveui in devices:
-                        logging.debug("check backhaul down time %d %d %d", cur_epoc_time, devices[deveui]["last_seen"], (cur_epoc_time - devices[deveui]["last_seen"]))
-                    if not deveui in devices or (deveui in devices and (cur_epoc_time - devices[deveui]["last_seen"]) > backhaul_timeout):
-                        devices[deveui] = {"last_seen": cur_epoc_time}
-                        app_schedule_downlink(apps[appeui], deveui, json.dumps({"port":backhaul_port,"data":backhaul_payload}))
+                    if backhaul_detect_enabled:
+                        cur_epoc_time = int(time.time())
+                        if deveui in devices:
+                            logging.debug("check backhaul down time %d %d %d", cur_epoc_time, devices[deveui]["last_seen"], (cur_epoc_time - devices[deveui]["last_seen"]))
+                        if not deveui in devices or (deveui in devices and (cur_epoc_time - devices[deveui]["last_seen"]) > backhaul_timeout):
+                            devices[deveui] = {"last_seen": cur_epoc_time}
+                            app_schedule_downlink(apps[appeui], deveui, json.dumps({"port":backhaul_port,"data":backhaul_payload}))
 
                 if "encodeHex" in default_app and default_app["encodeHex"]:
                     payload_json = json.loads(msg.payload)
@@ -880,7 +869,7 @@ def on_mqtt_message(client, userdata, msg):
                     payload_json["data-format"] = "hexadecimal";
                     msg.payload = json.dumps(payload_json)
 
-                if "cloudService" in apps[appeui]["options"] and apps[appeui]["options"]["cloudService"] == "AZURE" and apps[appeui]["options"]["uplinkTopic"] != app_default_mqtt_uplink_topic:
+                if "cloudService" in apps[appeui]["options"] and apps[appeui]["options"]["cloudService"] == "AZURE":
                     json_temp = json.loads(msg.payload)
                     json_temp["client_id"] = default_app["options"]["client_id"]
                     uplink_topic = default_app["options"]["uplinkTopic"] % json_temp
@@ -1183,43 +1172,7 @@ query.close()
 for dev in dev_list:
     if dev["appeui"] in apps:
         if apps[dev["appeui"]]["isMqtt"] and dev["appeui"] in mqtt_clients:
-
-            if "cloudService" in apps[dev["appeui"]]["options"] and apps[dev["appeui"]]["options"]["cloudService"] == "AZURE" and apps[dev["appeui"]]["options"]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                dev["client_id"] = apps[dev["appeui"]]["options"]["client_id"]
-                topic = apps[dev["appeui"]]["options"]["downlinkTopic"] % dev
-                logging.debug("subscribe for app messages: %s", topic)
-                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-                mqtt_clients[dev["appeui"]].subscribe("$iothub/methods/POST/#", 1)
-                continue
-            elif default_app["options"]["overrideTopicsForAllApps"] and default_app["options"]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                topic = default_app["options"]["downlinkTopic"] % dev
-                logging.debug("subscribe for app messages: %s", topic)
-                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-            elif "downlinkTopic" in apps[dev["appeui"]]["options"] and apps[dev["appeui"]]["options"]["downlinkTopic"] != app_default_mqtt_downlink_topic:
-                topic = apps[dev["appeui"]]["options"]["downlinkTopic"] % dev
-                logging.debug("subscribe for app messages: %s", topic)
-                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-            topic = app_mqtt_subscribe_topic % ( dev["appeui"], dev["deveui"] )
-            logging.debug("subscribe for app messages: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-            topic = app_mqtt_subscribe_topic % ( gw_uuid, dev["deveui"] )
-            logging.debug("subscribe for app messages: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-            topic = app_mqtt_subscribe_topic % ( dev["appeui"], gw_uuid )
-            logging.debug("subscribe for app messages: %s", topic)
-            mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-            for gw in gateways:
-                topic = app_mqtt_downlink_topic % ( gw, dev["deveui"] )
-                logging.debug("subscribe for downlinks: %s", topic)
-                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
-
-                topic = app_mqtt_clear_topic % ( gw, dev["deveui"] )
-                logging.debug("subscribe for queue clear: %s", topic)
-                mqtt_clients[dev["appeui"]].subscribe(str(topic), 1)
+            mqtt_subscribe_to_app_topics(dev["appeui"])
 
         if apps[dev["appeui"]]["isHttp"] and dev["appeui"] in http_clients:
             if dev["appeui"] not in http_app_devices:

@@ -7,7 +7,7 @@ import paho.mqtt.client as mqtt
 import sys
 import json
 import uuid
-import serial, time
+import serial, time, random
 
 serial_ports = {}
 
@@ -241,6 +241,8 @@ def api_mqtt_command():
             message_data["lines"] = data["lines"]
          else:
             message_data["lines"] = 50
+
+      message_data["rid"] = random.randint(0, 100000);
 
 
       local_client.publish("lorawan/" + data["appeui"] + "/" + data["gwuuid"].replace("-", "").upper() +  "/" + data["type"], json.dumps(message_data))

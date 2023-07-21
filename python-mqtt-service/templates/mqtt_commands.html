@@ -68,10 +68,7 @@
                     if (document.getElementById("command_type").value == "log_req") {
                         document.getElementById("command_response").innerHTML = message.payload.result;
                     } else if (document.getElementById("command_type").value == "lora_req") {
-                        if (message.payload["result"] != null)
-                            document.getElementById("command_response").innerHTML = message.payload.result
-                        else
-                            document.getElementById("command_response").innerHTML = JSON.stringify(message.payload, null, 2);
+                        document.getElementById("command_response").innerHTML = JSON.stringify(message.payload, null, 2);
                     } else if (document.getElementById("command_type").value == "api_req") {
                         document.getElementById("command_response").innerHTML = JSON.stringify(message.payload, null, 2);
                     }
@@ -227,11 +224,11 @@ POST /api/command/save_restart
 POST /api/command/restart
 POST /api/lora/restart
 
-GET /api/status
-GET /api/status/gps
-GET /api/status/memory
-GET /api/status/storage
-GET /api/status/lan0
+GET /api/stats
+GET /api/stats/gps
+GET /api/stats/memory
+GET /api/stats/storage
+GET /api/stats/eth0
 
 GET /api/waninfo
 GET /api/loraNetwork
