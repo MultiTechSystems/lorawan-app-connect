@@ -25,6 +25,10 @@ def on_mqtt_connect(client, userdata, flags, rc):
 def on_mqtt_message(client, userdata, msg):
    print(msg.topic,msg.payload)
 
+   if "/moved" in msg.topic:
+      mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": ""})
+      return
+
    if "/close" in msg.topic:
       mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": ""})
       return
@@ -44,19 +48,29 @@ def on_mqtt_message(client, userdata, msg):
 
       p_json = json.loads(msg.payload)
 
+      try:
+         gw_uuid = uuid.UUID(parts[2])
+         has_app = True
+      except:
+         gw_uuid = uuid.UUID(parts[1])
+         has_app = False
+
       for gw in p_json["gateways_euis"]:
          found = False
-         for ch_gw in gateways:
+         for i, ch_gw in enumerate(gateways):
             if ch_gw[0] == gw:
                found = True
+               # update gateway with latest init
+               gateways[i] = (gw, gw_uuid, has_app )
                break
          if not found:
-            print("adding gateway_eui to list")
-            gateways.append( (gw, uuid.UUID(parts[2])) )
+            print("adding gateway_eui to list", (gw, gw_uuid, has_app ))
+            gateways.append( (gw, gw_uuid, has_app ) )
 
-      if not parts[1] in applications:
+      if has_app and not parts[1] in applications:
          print("adding application to list")
          applications.append(parts[1])
+
    try:
       mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": json.loads(msg.payload)})
    except:
@@ -71,7 +85,7 @@ def on_mqtt_subscribe(client, userdata, mid, qos):
 def on_mqtt_disconnect(client, userdata, rc):
     mqtt_status["connected"] = False
 
-local_client = mqtt.Client()
+local_client = mqtt.Client(clean_session=True)
 
 local_client.on_connect = on_mqtt_connect
 local_client.on_message = on_mqtt_message
@@ -121,6 +135,8 @@ def enqueue():
          local_client.publish("lorawan/" + data["gweui"] + "/" + data["deveui"] + "/down", '{"data":"' + b64encode(bytes.fromhex(data["payload"])).decode() + '","port":' + data["port"] + "}")
       if data["schedule"] == "GwUUID":
          local_client.publish("lorawan/" + data["gwuuid"].replace("-", "").upper() + "/" + data["deveui"] + "/down", '{"data":"' + b64encode(bytes.fromhex(data["payload"])).decode() + '","port":' + data["port"] + "}")
+      if data["schedule"] == "GwUUID v1.1":
+         local_client.publish("lorawan/" + data["gwuuid"] + "/down", '{"deveui": "' + data["deveui"] + '", "data":"' + b64encode(bytes.fromhex(data["payload"])).decode() + '","port":' + data["port"] + "}")
       return "Success<script>setTimeout(function(){ window.location = '/downlink'; }, 3000);</script>"
 
 @app.route('/downlink',)
@@ -244,8 +260,16 @@ def api_mqtt_command():
 
       message_data["rid"] = random.randint(0, 100000);
 
+      gateway = (0,0,1)
 
-      local_client.publish("lorawan/" + data["appeui"] + "/" + data["gwuuid"].replace("-", "").upper() +  "/" + data["type"], json.dumps(message_data))
+      for gw in gateways:
+         if gw[1] == uuid.UUID(data["gwuuid"]):
+            gateway = gw
+
+      if not gateway[2]:
+         local_client.publish("lorawan/" + data["gwuuid"] +  "/" + data["type"], json.dumps(message_data))
+      else:
+         local_client.publish("lorawan/" + data["appeui"] + "/" + data["gwuuid"].replace("-", "").upper() +  "/" + data["type"], json.dumps(message_data))
 
       return json.dumps({ "code": 200, "status": "success" })
    else:
@@ -260,7 +284,7 @@ def api_mqtt():
       global mqtt_port
 
       try:
-         local_client = mqtt.Client()
+         local_client = mqtt.Client(clean_session=True)
 
          local_client.on_connect = on_mqtt_connect
          local_client.on_message = on_mqtt_message

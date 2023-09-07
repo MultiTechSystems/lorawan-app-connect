@@ -22,7 +22,7 @@
 
         appeui.parentElement.style.display = (text != "AppEUI") ? "none" : "block";
         gweui.parentElement.style.display = (text != "GwEUI") ? "none" : "block";
-        gwuuid.parentElement.style.display = (text != "GwUUID") ? "none" : "block";
+        gwuuid.parentElement.style.display = (text == "GwUUID") || (text == "GwUUID v1.1") ? "block" : "none";
     }
 
     function on_load() {
@@ -48,6 +48,7 @@
                             <option>AppEUI</option>
                             <option>GwEUI</option>
                             <option>GwUUID</option>
+                            <option>GwUUID v1.1</option>
                         </select>
 
                         <div style="display:block;">
@@ -60,14 +61,14 @@
 
                         <div style="display:none;">
                             <label>GwEUI</label> <select name="gweui" id="gweui">
-                                {% for eui, uuid in gateways: %}
+                                {% for eui, uuid, has_app in gateways: %}
                                 <option>{{eui}}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div style="display:none;">
                             <label>GwUUID</label> <select name="gwuuid" id="gwuuid">
-                                {% for eui, uuid in gateways: %}
+                                {% for eui, uuid, has_app in gateways: %}
                                 <option>{{uuid}}</option>
                                 {% endfor %}
                             </select>

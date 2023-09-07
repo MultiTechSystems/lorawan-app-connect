@@ -64,7 +64,7 @@
             for (var msg in data["messages"]) {
                 var message = data["messages"][msg];
                 var cmd_type = document.getElementById("command_type").value.replace("req", "res");
-                if (message.topic.split("/")[3] == cmd_type) {
+                if (message.topic.split("/")[3] == cmd_type || message.topic.split("/")[2] == cmd_type) {
                     if (document.getElementById("command_type").value == "log_req") {
                         document.getElementById("command_response").innerHTML = message.payload.result;
                     } else if (document.getElementById("command_type").value == "lora_req") {
@@ -137,8 +137,12 @@
                             <div class="column column-50">
                                 <div>
                                     <label>Gateway</label> <select name="gwuuid" id="gwuuid">
-                                        {% for eui, uuid in gateways: %}
+                                        {% for eui, uuid, has_app in gateways: %}
+                                        {% if has_app %}
                                         <option value="{{uuid}}">{{ uuid }} - {{ eui }}</option>
+                                        {% else %}
+                                        <option value="{{uuid}}">{{ uuid }}</option>
+                                        {% endif %}
                                         {% endfor %}
                                     </select>
                                 </div>

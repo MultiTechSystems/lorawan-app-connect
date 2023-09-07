@@ -27,7 +27,7 @@
                     </thead>
                     <tbody>
 
-                        {% for eui, uuid in gateways: %}
+                        {% for eui, uuid, has_app in gateways: %}
                         <tr>
                             <td>{{ eui }}
                             <td>{{ uuid }}</td>
