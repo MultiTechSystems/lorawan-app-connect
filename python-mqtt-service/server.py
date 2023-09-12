@@ -25,6 +25,42 @@ def on_mqtt_connect(client, userdata, flags, rc):
 def on_mqtt_message(client, userdata, msg):
    print(msg.topic,msg.payload)
 
+
+   if "/api_res" in msg.topic:
+      parts = msg.topic.split("/")
+
+      try:
+         gw_uuid = uuid.UUID(parts[2])
+         app_eui = parts[1]
+         has_app = True
+      except:
+         gw_uuid = uuid.UUID(parts[1])
+         has_app = False
+
+      ip_addr = None
+      hw_ver = None
+      fw_ver = None
+
+      p_json = json.loads(msg.payload)
+      if "rid" in p_json and p_json["rid"] == "DEVICE_DATA":
+         # api_res for system info
+         hw_ver = p_json["result"]["hardwareVersion"]
+         fw_ver = p_json["result"]["firmware"]
+      if "rid" in p_json and p_json["rid"] == "ETH_DATA":
+         ip_addr = p_json["result"]["ip"]
+
+      for i, ch_gw in enumerate(gateways):
+         if ch_gw[1] == gw_uuid:
+            gateway = (ch_gw[0], ch_gw[1], ch_gw[2], ch_gw[3], ch_gw[4], ch_gw[5])
+            if ip_addr:
+               gateway = (ch_gw[0], ch_gw[1], ch_gw[2], ip_addr, ch_gw[4], ch_gw[5])
+            if hw_ver and fw_ver:
+               gateway = (ch_gw[0], ch_gw[1], ch_gw[2], ch_gw[3], hw_ver, fw_ver)
+
+            # update gateway with latest init
+            gateways[i] = gateway
+            break
+
    if "/moved" in msg.topic:
       mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": ""})
       return
@@ -50,26 +86,55 @@ def on_mqtt_message(client, userdata, msg):
 
       try:
          gw_uuid = uuid.UUID(parts[2])
+         app_eui = parts[1]
          has_app = True
       except:
          gw_uuid = uuid.UUID(parts[1])
          has_app = False
 
+      gateway = None
+
       for gw in p_json["gateways_euis"]:
          found = False
+         gateway = (gw, gw_uuid, has_app, None, None, None )
          for i, ch_gw in enumerate(gateways):
             if ch_gw[0] == gw:
                found = True
                # update gateway with latest init
-               gateways[i] = (gw, gw_uuid, has_app )
+               gateways[i] = gateway
                break
          if not found:
-            print("adding gateway_eui to list", (gw, gw_uuid, has_app ))
-            gateways.append( (gw, gw_uuid, has_app ) )
+            print("adding gateway_eui to list", gateway)
+            gateways.append( gateway )
 
-      if has_app and not parts[1] in applications:
+      if has_app and not app_eui in applications:
          print("adding application to list")
-         applications.append(parts[1])
+         applications.append(app_eui)
+
+      # Get additional system info
+      message_data = {
+         "method": "GET",
+         "path": "/api/system",
+         "body": "",
+         "rid": "DEVICE_DATA"
+      }
+
+      if not gateway[2]:
+         local_client.publish("lorawan/" + str(gw_uuid) +  "/api_req", json.dumps(message_data))
+      else:
+         local_client.publish("lorawan/" + app_eui + "/" + str(gw_uuid).replace("-", "").upper() +  "/api_req" , json.dumps(message_data))
+
+      message_data = {
+         "method": "GET",
+         "path": "/api/stats/eth0",
+         "body": "",
+         "rid": "ETH_DATA"
+      }
+
+      if not gateway[2]:
+         local_client.publish("lorawan/" + str(gw_uuid) +  "/api_req", json.dumps(message_data))
+      else:
+         local_client.publish("lorawan/" + app_eui + "/" + str(gw_uuid).replace("-", "").upper() +  "/api_req" , json.dumps(message_data))
 
    try:
       mqtt_status['messages'].insert(0, {"topic": msg.topic, "payload": json.loads(msg.payload)})

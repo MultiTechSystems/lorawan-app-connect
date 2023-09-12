@@ -23,14 +23,22 @@
                         <tr>
                             <th>Gateway EUI</th>
                             <th>UUID</th>
+                            <th>V1.0</th>
+                            <th>IP ADDR</th>
+                            <th>HW VERSION</th>
+                            <th>FW_VERSION</th>
                         </tr>
                     </thead>
                     <tbody>
 
-                        {% for eui, uuid, has_app in gateways: %}
+                        {% for eui, uuid, has_app, ip_addr, hw_ver, fw_ver in gateways: %}
                         <tr>
                             <td>{{ eui }}
                             <td>{{ uuid }}</td>
+                            <td>{{ has_app }}</td>
+                            <td>{{ ip_addr }}</td>
+                            <td>{{ hw_ver }}</td>
+                            <td>{{ fw_ver }}</td>
                         </tr>
                         {% endfor %}
                     </tbody>

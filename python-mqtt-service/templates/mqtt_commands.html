@@ -137,11 +137,11 @@
                             <div class="column column-50">
                                 <div>
                                     <label>Gateway</label> <select name="gwuuid" id="gwuuid">
-                                        {% for eui, uuid, has_app in gateways: %}
+                                        {% for eui, uuid, has_app, ip_addr, hw_ver, fw_ver in gateways: %}
                                         {% if has_app %}
-                                        <option value="{{uuid}}">{{ uuid }} - {{ eui }}</option>
+                                        <option value="{{uuid}}">{{ip_addr}} - {{ uuid }} - {{ eui }}</option>
                                         {% else %}
-                                        <option value="{{uuid}}">{{ uuid }}</option>
+                                        <option value="{{uuid}}">{{ip_addr}} - {{ uuid }}</option>
                                         {% endif %}
                                         {% endfor %}
                                     </select>
