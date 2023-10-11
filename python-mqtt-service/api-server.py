@@ -177,22 +177,22 @@ local_client.connect(mqtt_server, mqtt_port, 60)
 
 local_client.loop_start()
 
-DOT_PORT = "/dev/ttyACM2"
+# DOT_PORT = "/dev/ttyACM2"
 
-def open_serial_port(portname):
-   global serial_ports
+# def open_serial_port(portname):
+#    global serial_ports
 
-   serial_ports[portname] = {}
-   serial_ports[portname]["device"] = serial.Serial(
-      port= portname,
-      baudrate= 115200,
-      parity=serial.PARITY_NONE,
-      stopbits=serial.STOPBITS_ONE,
-      bytesize=serial.EIGHTBITS
-   )
-   serial_ports[portname]["response"] = []
+#    serial_ports[portname] = {}
+#    serial_ports[portname]["device"] = serial.Serial(
+#       port= portname,
+#       baudrate= 115200,
+#       parity=serial.PARITY_NONE,
+#       stopbits=serial.STOPBITS_ONE,
+#       bytesize=serial.EIGHTBITS
+#    )
+#    serial_ports[portname]["response"] = []
 
-open_serial_port(DOT_PORT)
+# open_serial_port(DOT_PORT)
 
 app = Flask(__name__)
 
@@ -261,7 +261,7 @@ def api_gateways(new_gwuuid):
    else:
       gw_list = "<ul>"
       for gw in gateways:
-         gw_list = gw_list + "<li><a href='/api/gateways/" + str(gw[1]) + "'>" + str(gw[1]) + "</a> - " + str(gw[3]) + " - " + str(gw[4]) + " - " + str(gw[5]) +"</li>"
+         gw_list = gw_list + "<li><a href='/api/gateways/" + str(gw[1]) + "'>" + str(gw[1]) + "</a> - " + str(gw[0]) + " - " + str(gw[3]) + " - " + str(gw[4]) + " - " + str(gw[5]) +"</li>"
       gw_list = gw_list + "</ul>"
 
 #      for gw in gateways:
