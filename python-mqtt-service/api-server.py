@@ -208,7 +208,7 @@ gwuuid = '8ffa106f-c751-cfcd-6300-80918d516837'
 
 
 # @app.route('/', defaults={'path':''})
-@app.route('/<path:path>', methods = ['GET', 'POST'])
+@app.route('/<path:path>', methods = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'])
 def index(path):
     print(request)
     print(path)
