@@ -20,7 +20,10 @@ applications = []
 
 def on_mqtt_connect(client, userdata, flags, rc):
    mqtt_status["connected"] = True
-   local_client.subscribe("lorawan/#")
+
+   local_client.subscribe("lorawan/+/init")
+   local_client.subscribe("lorawan/+/api_res")
+   local_client.subscribe("lorawan/+/close")
 
 
 api_responses = {}
@@ -44,8 +47,6 @@ def on_mqtt_message(client, userdata, msg):
       hw_ver = None
       fw_ver = None
 
-
-      print(msg.payload)
       try:
           p_json = json.loads(msg.payload)
           api_responses[str(p_json["rid"])] = msg.payload
@@ -221,12 +222,12 @@ def index(path):
     global gwuuid
 
     rid = rid + 1
-    my_rid = rid
+    my_rid = str(gwuuid) + str(rid)
     message_data = {
             'method': request.method,
             'path': '/' + path,
             'body': '',
-            'rid': rid
+            'rid': my_rid
             }
 
     if len(request.query_string) != 0:
@@ -259,7 +260,7 @@ def api_gateways(new_gwuuid):
       gwuuid = new_gwuuid
       return '<meta http-equiv="refresh" content="0; url=/" />'
    else:
-      gw_list = "<ul>"
+      gw_list = "<h1>Gateways</h1><ul>"
       for gw in gateways:
          gw_list = gw_list + "<li><a href='/api/gateways/" + str(gw[1]) + "'>" + str(gw[1]) + "</a> - " + str(gw[0]) + " - " + str(gw[3]) + " - " + str(gw[4]) + " - " + str(gw[5]) +"</li>"
       gw_list = gw_list + "</ul>"
