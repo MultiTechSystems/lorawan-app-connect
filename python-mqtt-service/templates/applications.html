@@ -1,40 +1,37 @@
-{% extends "base.html" %}
-{% block title %}Queue Downlink{% endblock %}
-{% block head %}
-{{ super() }}
+{% extends "base.html" %} {% block title %}Queue Downlink{% endblock %} {% block
+head %} {{ super() }}
 <style type="text/css">
-    .important {
-        color: #336699;
-    }
+  .important {
+    color: #336699;
+  }
 </style>
 
-{% endblock %}
-{% block content %}
+{% endblock %} {% block content %}
 
 <div class="row grid-responsive">
-    <div class="column">
-        <div class="card">
-            <div class="card-title">
-                <h3>Applications</h3>
-            </div>
-            <div class="card-block">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>AppEUI</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for appeui in applications: %}
-                        <tr>
-                            <td>{{ appeui }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+  <div class="column">
+    <div class="card">
+      <div class="card-title">
+        <h3>Applications</h3>
+      </div>
+      <div class="card-block">
+        <table>
+          <thead>
+            <tr>
+              <th>AppEUI</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for appeui in applications: %}
+            <tr>
+              <td>{{ appeui }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
     </div>
+  </div>
 </div>
 
 {% endblock %}

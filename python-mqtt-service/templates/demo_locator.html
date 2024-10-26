@@ -1,546 +1,623 @@
-{% extends "base.html" %}
-{% block title %}Locator Demo{% endblock %}
-{% block head %}
-{{ super() }}
+{% extends "base.html" %} {% block title %}Locator Demo{% endblock %} {% block
+head %} {{ super() }}
 <style type="text/css">
-    .important {
-        color: #336699;
-    }
+  .important {
+    color: #336699;
+  }
 
-    .outsideWrapper {
-        width: 100%;
-        height: 100%;
-    }
+  .outsideWrapper {
+    width: 100%;
+    height: 100%;
+  }
 
-    .insideWrapper {
-        width: 100%;
-        height: 100%;
-        position: relative;
-    }
+  .insideWrapper {
+    width: 100%;
+    height: 100%;
+    position: relative;
+  }
 
-    .coveredImage {
-        width: 100%;
-        height: 100%;
-    }
+  .coveredImage {
+    width: 100%;
+    height: 100%;
+  }
 
-    .coveringCanvas {
-        width: 100%;
-        height: 100%;
-        position: absolute;
-        top: 0px;
-        left: 0px;
-        border: 10px solid 24ff00;
-        color: #24ff00;
-    }
+  .coveringCanvas {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    border: 10px solid 24ff00;
+    color: #24ff00;
+  }
 </style>
 
 <script lang="javascript">
+  var min_rssi = -99
 
-    var min_rssi = -99;
+  var deveui = ''
+  var ble_devices = {}
 
-    var deveui = "";
-    var ble_devices = {
-    };
+  var mtb_devices = {
+    '00-80-00-00-04-03-97-6b': { init: true, rssi_adjust: -10 },
+    '00-80-00-00-04-03-97-78': { init: true, rssi_adjust: 5 },
+    '00-80-00-00-04-03-97-7c': { init: true, rssi_adjust: 5 },
+    '00-80-00-00-04-03-97-80': { init: true, rssi_adjust: 10 },
+  }
 
-    var mtb_devices = {
-        "00-80-00-00-04-03-97-6b": { "init": true, "rssi_adjust": -10 },
-        "00-80-00-00-04-03-97-78": { "init": true, "rssi_adjust": 5 },
-        "00-80-00-00-04-03-97-7c": { "init": true, "rssi_adjust": 5 },
-        "00-80-00-00-04-03-97-80": { "init": true, "rssi_adjust": 10 }
-    };
-
-    function send_command() {
-        console.log("sending http request")
-        const xhttp = new XMLHttpRequest();
-        xhttp.onload = function () {
-            document.getElementById("output").value = this.responseText;
-        }
-        xhttp.open("POST", "/device/" + deveui, true);
-        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
-        xhttp.send(JSON.stringify({ "command": document.getElementById("command").value }));
+  function send_command() {
+    console.log('sending http request')
+    const xhttp = new XMLHttpRequest()
+    xhttp.onload = function () {
+      document.getElementById('output').value = this.responseText
     }
+    xhttp.open('POST', '/device/' + deveui, true)
+    xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+    xhttp.send(
+      JSON.stringify({ command: document.getElementById('command').value }),
+    )
+  }
 
-    function update_mqtt() {
-        console.log("sending http request")
-        const xhttp = new XMLHttpRequest();
-        xhttp.onload = function () {
-            // console.log(this.responseText);
-            $('#mqtt_table tr').remove();
-            $('#app_messages_table tr').remove();
-            $('#ble_devices_table tr').remove();
-            $('#mtb_devices_table tr').remove();
+  function update_mqtt() {
+    console.log('sending http request')
+    const xhttp = new XMLHttpRequest()
+    xhttp.onload = function () {
+      // console.log(this.responseText);
+      $('#mqtt_table tr').remove()
+      $('#app_messages_table tr').remove()
+      $('#ble_devices_table tr').remove()
+      $('#mtb_devices_table tr').remove()
 
-            var data = JSON.parse(this.responseText);
+      var data = JSON.parse(this.responseText)
 
-            var ble_updated = {};
-            for (ble_dev in ble_devices) {
-                ble_updated[ble_dev] = false;
+      var ble_updated = {}
+      for (ble_dev in ble_devices) {
+        ble_updated[ble_dev] = false
+      }
+
+      for (deveui in mtb_devices) {
+        mtb_devices[deveui]['init'] = true
+      }
+
+      var first_uplink = false
+      for (var msg in data['messages']) {
+        var message = data['messages'][msg]
+
+        if (/.*\/up/.exec(message.topic)) {
+          deveui = message.topic.split('/')[2]
+
+          var mac_addr = ''
+          var rssi = message.payload['rssi'].toString() + ' dBm'
+          var snr = message.payload['lsnr'].toString() + ' dB'
+
+          var data_array = []
+          var data_str = atob(message.payload['data'])
+
+          for (var i = 0; i < data_str.length; i++)
+            data_array.push(data_str.charCodeAt(i))
+
+          var data_hex = ''
+          for (var i = 0; i < data_array.length; i++)
+            data_hex += data_array[i].toString(16).padStart(2, '0')
+
+          if (
+            deveui in mtb_devices &&
+            message.payload['data'].length > 0 &&
+            data_array[0] == 0x00
+          ) {
+            // data_array[0] == 0x00 to handle only full packet data
+            var ble_type = 'UNKNOWN'
+
+            var ble_rssi =
+              -(data_array[9] & ~0x80) + mtb_devices[deveui]['rssi_adjust']
+
+            var msg_data = {
+              type: 'MTB',
+              data: message.payload['data'],
+              data_hex: data_hex,
+              data_size: data_array.length,
+              parsed_data: {
+                sequence: data_array[0],
+                size: data_array[1],
+                type: data_array[2],
+                ble_data: {
+                  crc:
+                    data_array[3].toString(16).padStart(2, '0') +
+                    data_array[4].toString(16).padStart(2, '0'),
+                  length: data_array[5],
+                  flags: data_array[6].toString(16).padStart(2, '0'),
+                  addr: data_array[7],
+                  filter: data_array[8],
+                  rssi: ble_rssi,
+                },
+              },
             }
 
-            for (deveui in mtb_devices) {
-                mtb_devices[deveui]["init"] = true;
+            if (/.*534c17ffcd07.*/.exec(data_hex)) {
+              console.log('Sloan Packet detected')
+              ble_type = 'Sloan'
+
+              var cursor = 23
+              var mac_addr = data_array[cursor++].toString(16).padStart(2, '0')
+              mac_addr += data_array[cursor++].toString(16).padStart(2, '0')
+              mac_addr += data_array[cursor++].toString(16).padStart(2, '0')
+              mac_addr += data_array[cursor++].toString(16).padStart(2, '0')
+            } else if (/.*020106.*/.exec(data_hex) && data_array.length == 41) {
+              console.log('B&D Packet detected')
+              ble_type = 'B&D'
+
+              var start = (data_hex.indexOf('020106') + 24) / 2
+              console.log(start)
+
+              for (var i = 0; i < 6; i++) {
+                mac_addr += data_array[start + i].toString(16).padStart(2, '0')
+              }
             }
 
-            var first_uplink = false;
-            for (var msg in data["messages"]) {
-                var message = data["messages"][msg];
+            msg_data['parsed_data']['mac_addr'] = mac_addr
+            msg_data['ble_type'] = ble_type
 
-                if (/.*\/up/.exec(message.topic)) {
-                    deveui = message.topic.split("/")[2];
+            if (mtb_devices[deveui]['init']) {
+              mtb_devices[deveui]['init'] = false
 
-                    var mac_addr = "";
-                    var rssi = message.payload["rssi"].toString() + " dBm";
-                    var snr = message.payload["lsnr"].toString() + " dB";
+              mtb_devices[deveui]['snr'] = snr
+              mtb_devices[deveui]['rssi'] = rssi
+              mtb_devices[deveui]['datr'] = message.payload['datr']
+              mtb_devices[deveui]['freq'] = message.payload['freq']
+              mtb_devices[deveui]['addr'] = message.payload['devaddr']
+              mtb_devices[deveui]['seqn'] = message.payload['seqn']
+              mtb_devices[deveui]['time'] = message.payload['time']
+            }
 
-                    var data_array = [];
-                    var data_str = atob(message.payload["data"]);
+            if (mac_addr != '') {
+              var index = 0
+              if (deveui == Object.keys(mtb_devices)[1]) index = 1
+              else if (deveui == Object.keys(mtb_devices)[2]) index = 2
+              else if (deveui == Object.keys(mtb_devices)[3]) index = 3
 
-                    for (var i = 0; i < data_str.length; i++)
-                        data_array.push(data_str.charCodeAt(i));
+              console.log('update eui', deveui, index, mac_addr)
 
-                    var data_hex = "";
-                    for (var i = 0; i < data_array.length; i++)
-                        data_hex += data_array[i].toString(16).padStart(2, "0");
+              if (!(mac_addr in ble_devices)) {
+                ble_devices[mac_addr] = {}
+                ble_devices[mac_addr]['rssi'] = [null, null, null, null]
+                ble_devices[mac_addr]['updated_arr'] = [null, null, null, null]
+              }
 
-                    if (deveui in mtb_devices && message.payload["data"].length > 0 && data_array[0] == 0x00) {
-                        // data_array[0] == 0x00 to handle only full packet data
-                        var ble_type = "UNKNOWN";
+              var ago_secs =
+                (new Date().getTime() -
+                  new Date(message.payload['time']).getTime()) /
+                1000
+              console.log(ago_secs)
+              var ago_hours = Math.floor(ago_secs / 3600)
+              var ago_mins = Math.floor((ago_secs - ago_hours * 3600) / 60)
+              var ago_secs_part = Math.floor(
+                ago_secs - ago_hours * 3600 - ago_mins * 60,
+              )
 
-                        var ble_rssi = -(data_array[9] & ~(0x80)) + mtb_devices[deveui]["rssi_adjust"];
+              if (ble_devices[mac_addr]['rssi'][index] == null) {
+                console.log('update mult', 99 * (ago_secs / 3600))
+                ble_devices[mac_addr]['rssi'][index] =
+                  ble_rssi - 99 * (ago_secs / 3600)
+                ble_devices[mac_addr]['rssi'][index] =
+                  ble_devices[mac_addr]['rssi'][index] > min_rssi
+                    ? ble_devices[mac_addr]['rssi'][index]
+                    : min_rssi
+                ble_devices[mac_addr]['updated_arr'][index] =
+                  ago_hours +
+                  ':' +
+                  ago_mins.toString().padStart(2, '0') +
+                  ':' +
+                  ago_secs_part.toString().padStart(2, '0') +
+                  ' ago'
+              } else if (!ble_updated[mac_addr]) {
+                // // reduce rssi for non-reporting devices?
+                // for (var x in ble_devices[mac_addr]["rssi"]) {
+                //     if (x != index && parseFloat(ble_devices[mac_addr]["rssi"][x]) > min_rssi)
+                //         ble_devices[mac_addr]["rssi"][x] = parseFloat(ble_devices[mac_addr]["rssi"][x]) - 1;
+                // }
 
-                        var msg_data = {
-                            "type": "MTB",
-                            "data": message.payload["data"],
-                            "data_hex": data_hex,
-                            "data_size": data_array.length,
-                            "parsed_data": {
-                                "sequence": data_array[0],
-                                "size": data_array[1],
-                                "type": data_array[2],
-                                "ble_data": {
-                                    "crc": data_array[3].toString(16).padStart(2, "0") + data_array[4].toString(16).padStart(2, "0"),
-                                    "length": data_array[5],
-                                    "flags": data_array[6].toString(16).padStart(2, "0"),
-                                    "addr": data_array[7],
-                                    "filter": data_array[8],
-                                    "rssi": ble_rssi
-                                }
-                            }
-                        };
-
-                        if (/.*534c17ffcd07.*/.exec(data_hex)) {
-                            console.log("Sloan Packet detected");
-                            ble_type = "Sloan";
-
-                            var cursor = 23;
-                            var mac_addr = data_array[cursor++].toString(16).padStart(2, "0");
-                            mac_addr += data_array[cursor++].toString(16).padStart(2, "0");
-                            mac_addr += data_array[cursor++].toString(16).padStart(2, "0");
-                            mac_addr += data_array[cursor++].toString(16).padStart(2, "0");
-
-                        } else if (/.*020106.*/.exec(data_hex) && data_array.length == 41) {
-                            console.log("B&D Packet detected");
-                            ble_type = "B&D";
-
-                            var start = (data_hex.indexOf("020106") + 24) / 2;
-                            console.log(start);
-
-                            for (var i = 0; i < 6; i++) {
-                                mac_addr += data_array[start + i].toString(16).padStart(2, "0");
-                            }
-                        }
-
-                        msg_data["parsed_data"]["mac_addr"] = mac_addr;
-                        msg_data["ble_type"] = ble_type;
-
-                        if (mtb_devices[deveui]["init"]) {
-                            mtb_devices[deveui]["init"] = false;
-
-                            mtb_devices[deveui]["snr"] = snr;
-                            mtb_devices[deveui]["rssi"] = rssi;
-                            mtb_devices[deveui]["datr"] = message.payload["datr"];
-                            mtb_devices[deveui]["freq"] = message.payload["freq"];
-                            mtb_devices[deveui]["addr"] = message.payload["devaddr"];
-                            mtb_devices[deveui]["seqn"] = message.payload["seqn"];
-                            mtb_devices[deveui]["time"] = message.payload["time"];
-                        }
-
-                        if (mac_addr != "") {
-                            var index = 0;
-                            if (deveui == Object.keys(mtb_devices)[1])
-                                index = 1;
-                            else if (deveui == Object.keys(mtb_devices)[2])
-                                index = 2;
-                            else if (deveui == Object.keys(mtb_devices)[3])
-                                index = 3;
-
-                            console.log("update eui", deveui, index, mac_addr);
-
-                            if (!(mac_addr in ble_devices)) {
-                                ble_devices[mac_addr] = {};
-                                ble_devices[mac_addr]["rssi"] = [null, null, null, null];
-                                ble_devices[mac_addr]["updated_arr"] = [null, null, null, null];
-                            }
-
-                            var ago_secs = (((new Date()).getTime() - (new Date(message.payload["time"]).getTime())) / 1000);
-                            console.log(ago_secs);
-                            var ago_hours = Math.floor(ago_secs / 3600);
-                            var ago_mins = Math.floor((ago_secs - ago_hours * 3600) / 60);
-                            var ago_secs_part = Math.floor((ago_secs - ago_hours * 3600 - ago_mins * 60));
-
-                            if (ble_devices[mac_addr]["rssi"][index] == null) {
-                                console.log("update mult", (99 * (ago_secs / 3600)));
-                                ble_devices[mac_addr]["rssi"][index] = ble_rssi - (99 * (ago_secs / 3600));
-                                ble_devices[mac_addr]["rssi"][index] = (ble_devices[mac_addr]["rssi"][index] > min_rssi) ? ble_devices[mac_addr]["rssi"][index] : min_rssi;
-                                ble_devices[mac_addr]["updated_arr"][index] = ago_hours + ":" + ago_mins.toString().padStart(2, "0") + ":" + ago_secs_part.toString().padStart(2, "0") + " ago";
-                            } else if (!ble_updated[mac_addr]) {
-
-                                // // reduce rssi for non-reporting devices?
-                                // for (var x in ble_devices[mac_addr]["rssi"]) {
-                                //     if (x != index && parseFloat(ble_devices[mac_addr]["rssi"][x]) > min_rssi)
-                                //         ble_devices[mac_addr]["rssi"][x] = parseFloat(ble_devices[mac_addr]["rssi"][x]) - 1;
-                                // }
-
-                                ble_updated[mac_addr] = true;
-                                if (parseFloat(ble_devices[mac_addr]["rssi"][index]) > min_rssi) {
-                                    // ble_devices[mac_addr]["rssi"][index] -= parseFloat(ble_devices[mac_addr]["rssi"][index]) / 10;
-                                    console.log("update mult", mac_addr, index, (99 * (ago_secs / 3600)));
-                                    ble_devices[mac_addr]["rssi"][index] = ble_rssi - (99 * (ago_secs / 3600));
-                                    ble_devices[mac_addr]["rssi"][index] = ble_devices[mac_addr]["rssi"][index].toFixed(2);
-                                } else {
-                                    ble_devices[mac_addr]["rssi"][index] = ble_rssi;
-                                }
-
-                                console.log(ago_secs_part, ago_mins, ago_hours);
-
-                                ble_devices[mac_addr]["updated_sec"] = ago_secs;
-                                ble_devices[mac_addr]["updated"] = ago_hours + ":" + ago_mins.toString().padStart(2, "0") + ":" + ago_secs_part.toString().padStart(2, "0") + " ago";
-                                ble_devices[mac_addr]["updated_arr"][index] = ago_hours + ":" + ago_mins.toString().padStart(2, "0") + ":" + ago_secs_part.toString().padStart(2, "0") + " ago";
-                            }
-                        }
-
-
-                        var date = new Date(message.payload["time"]);
-
-                        $("#app_messages_table").append('<tr><td>' + deveui + '</td><td>' + message.payload["gweui"] + '</td><td title="' + message.payload["time"] + '"">' + date.toString() + '</td><td>' + JSON.stringify(msg_data, null, 5) + '</td></tr>');
-                    }
+                ble_updated[mac_addr] = true
+                if (
+                  parseFloat(ble_devices[mac_addr]['rssi'][index]) > min_rssi
+                ) {
+                  // ble_devices[mac_addr]["rssi"][index] -= parseFloat(ble_devices[mac_addr]["rssi"][index]) / 10;
+                  console.log(
+                    'update mult',
+                    mac_addr,
+                    index,
+                    99 * (ago_secs / 3600),
+                  )
+                  ble_devices[mac_addr]['rssi'][index] =
+                    ble_rssi - 99 * (ago_secs / 3600)
+                  ble_devices[mac_addr]['rssi'][index] =
+                    ble_devices[mac_addr]['rssi'][index].toFixed(2)
+                } else {
+                  ble_devices[mac_addr]['rssi'][index] = ble_rssi
                 }
 
-                $('#mqtt_table').append('<tr><td>' + message.topic + '</td><td>' + JSON.stringify(message.payload, null, 1) + '</td></tr>');
+                console.log(ago_secs_part, ago_mins, ago_hours)
+
+                ble_devices[mac_addr]['updated_sec'] = ago_secs
+                ble_devices[mac_addr]['updated'] =
+                  ago_hours +
+                  ':' +
+                  ago_mins.toString().padStart(2, '0') +
+                  ':' +
+                  ago_secs_part.toString().padStart(2, '0') +
+                  ' ago'
+                ble_devices[mac_addr]['updated_arr'][index] =
+                  ago_hours +
+                  ':' +
+                  ago_mins.toString().padStart(2, '0') +
+                  ':' +
+                  ago_secs_part.toString().padStart(2, '0') +
+                  ' ago'
+              }
             }
 
-            console.log(ble_devices);
-            ble_devices = Object.keys(ble_devices)
-                .sort()
-                .reduce((accumulator, key) => {
-                    accumulator[key] = ble_devices[key];
+            var date = new Date(message.payload['time'])
 
-                    return accumulator;
-                }, {});
-
-            // var mac_addr = "FAKEDEVICE";
-            // var ble_rssi = -99;
-            // var direction = -1;
-            // for (var x = 0; x < 4; x++) {
-            //     direction = Math.random() > 0.5 ? 1 : -1;
-            //     ble_rssi = Math.floor(-(50 + Math.random() * 50)) + (direction * x * 20);
-            //     ble_devices[mac_addr]["rssi"][x] -= ble_devices[mac_addr]["rssi"][x] / 10;
-            //     ble_devices[mac_addr]["rssi"][x] += ble_rssi / 10;
-            //     ble_devices[mac_addr]["rssi"][x] = ble_devices[mac_addr]["rssi"][x].toFixed(2);
-            // }
-            // ble_devices[mac_addr]["updated"] = "just now";
-
-            for (ble_dev in ble_devices) {
-                if (ble_devices.hasOwnProperty(ble_dev))
-                    $("#ble_devices_table").append('<tr><td>' + ble_dev + '</td><td>' + JSON.stringify(ble_devices[ble_dev]) + '</td></tr>')
-            }
-
-            for (mtb_dev in mtb_devices) {
-                if (mtb_devices.hasOwnProperty(mtb_dev))
-                    $("#mtb_devices_table").append('<tr><td>' + mtb_dev + '</td><td>' + JSON.stringify(mtb_devices[mtb_dev]) + '</td></tr>')
-            }
-
-            drawBoard();
-        }
-        xhttp.open("GET", "/api/mqtt", true);
-        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
-        xhttp.send();
-    }
-
-    setInterval(update_mqtt, 5000);
-
-
-
-    var scaleX = 5;
-    var scaleY = 3;
-
-    function send_command() {
-        console.log("sending http request")
-        const xhttp = new XMLHttpRequest();
-        xhttp.onload = function () {
-            document.getElementById("output").value = this.responseText;
-        }
-        xhttp.open("POST", "/device/{{eui}}", true);
-        xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
-        xhttp.send(JSON.stringify({ "command": document.getElementById("command").value }));
-    }
-
-    var mouse_x, mouse_y;
-
-    var locator_colors = [
-        '#FF3300',
-        '#FFFF00',
-        '#00CC00',
-        '#0099FF',
-        '#0000FF',
-        '#9900CC',
-        '#FF0099',
-    ];
-
-    CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
-        if (w < 2 * r) r = w / 2;
-        if (h < 2 * r) r = h / 2;
-        this.beginPath();
-        this.moveTo(x + r, y);
-        this.arcTo(x + w, y, x + w, y + h, r);
-        this.arcTo(x + w, y + h, x, y + h, r);
-        this.arcTo(x, y + h, x, y, r);
-        this.arcTo(x, y, x + w, y, r);
-        this.closePath();
-        return this;
-    }
-
-    function drawBoard() {
-        var radius = 7;
-
-        var scaleX = $("#scale_x").val();
-        var scaleY = $("#scale_y").val();
-
-        // Convert RSSI to approx distance from each gateway
-        // Calculate X,Y from circle intersection
-
-
-        var canvas = document.getElementById("canvas");
-        var context = canvas.getContext("2d")
-
-        updateGatewayLocations();
-
-        var i = 0;
-
-        for (ble_addr in ble_devices) {
-            var rssi = JSON.parse(JSON.stringify(ble_devices[ble_addr]["rssi"]));
-
-            for (var j = 0; j < 4; j++) {
-
-                if (rssi[j] == null)
-                    rssi[j] = min_rssi;
-                else
-                    rssi[j] = parseFloat(rssi[j]);
-            }
-
-            var centerX = (parseInt($("#mtb1_x").val()) + parseInt($("#mtb2_x").val()) + parseInt($("#mtb3_x").val()) + parseInt($("#mtb4_x").val())) / 4;
-            centerX += (rssi[2] - rssi[0]) * scaleX;
-            centerX += (rssi[3] - rssi[1]) * scaleX;
-            var centerY = (parseInt($("#mtb1_y").val()) + parseInt($("#mtb2_y").val()) + parseInt($("#mtb3_y").val()) + parseInt($("#mtb4_y").val())) / 4;
-            centerY += (rssi[1] - rssi[0]) * scaleY;
-            centerY += (rssi[3] - rssi[2]) * scaleY;
-
-            console.log("update position", centerX, centerY);
-
-            context.beginPath();
-            context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
-            context.fillStyle = locator_colors[i++];
-            context.fill();
-            context.globalAlpha = 0.75; // set global alpha
-            context.lineWidth = 1;
-            context.strokeStyle = 'black';
-            context.stroke();
-            context.beginPath();
-            context.globalAlpha = 0.3; // set global alpha
-            context.arc(centerX - 2, centerY - 2, 4, 0, 2 * Math.PI, false);
-            context.fillStyle = "grey";
-            context.fill();
-
-            context.beginPath();
-            context.globalAlpha = 0.1; // set global alpha
-            context.arc(centerX - 2, centerY - 2, 2, 0, 2 * Math.PI, false);
-            context.fillStyle = "white";
-            context.fill();
-            context.beginPath();
-            context.globalAlpha = 0.7; // set global alpha
-            context.arc(centerX - 2, centerY - 2, 1, 0, 2 * Math.PI, false);
-            context.fillStyle = "white";
-            context.fill();
-
-
-
-
-            context.globalAlpha = 0.25; // set global alpha
-            context.beginPath();
-            context.roundRect(centerX + 10, centerY - 28, 140, 60, 10);
-            context.fillStyle = "#000000";
-            context.fill();
-            context.beginPath();
-            context.roundRect(centerX + 13, centerY - 24, 132, 52, 10);
-            context.fillStyle = "#000000";
-            context.fill();
-            context.beginPath();
-            context.roundRect(centerX + 15, centerY - 20, 124, 44, 10);
-            context.fillStyle = "#000000";
-            context.fill();
-
-            context.globalAlpha = 1.0;
-
-            // change font and font-size for better visibilty
-            context.font = "20px Open Sans,sans-serif";
-            context.fillStyle = 'white';
-            // draw "Test text" at X = 10 and Y = 30
-            context.fillText(ble_addr, centerX + 21, centerY);
-
-            context.fillText(ble_devices[ble_addr]["updated"], centerX + 21, centerY + 17);
+            $('#app_messages_table').append(
+              '<tr><td>' +
+                deveui +
+                '</td><td>' +
+                message.payload['gweui'] +
+                '</td><td title="' +
+                message.payload['time'] +
+                '"">' +
+                date.toString() +
+                '</td><td>' +
+                JSON.stringify(msg_data, null, 5) +
+                '</td></tr>',
+            )
+          }
         }
 
+        $('#mqtt_table').append(
+          '<tr><td>' +
+            message.topic +
+            '</td><td>' +
+            JSON.stringify(message.payload, null, 1) +
+            '</td></tr>',
+        )
+      }
+
+      console.log(ble_devices)
+      ble_devices = Object.keys(ble_devices)
+        .sort()
+        .reduce((accumulator, key) => {
+          accumulator[key] = ble_devices[key]
+
+          return accumulator
+        }, {})
+
+      // var mac_addr = "FAKEDEVICE";
+      // var ble_rssi = -99;
+      // var direction = -1;
+      // for (var x = 0; x < 4; x++) {
+      //     direction = Math.random() > 0.5 ? 1 : -1;
+      //     ble_rssi = Math.floor(-(50 + Math.random() * 50)) + (direction * x * 20);
+      //     ble_devices[mac_addr]["rssi"][x] -= ble_devices[mac_addr]["rssi"][x] / 10;
+      //     ble_devices[mac_addr]["rssi"][x] += ble_rssi / 10;
+      //     ble_devices[mac_addr]["rssi"][x] = ble_devices[mac_addr]["rssi"][x].toFixed(2);
+      // }
+      // ble_devices[mac_addr]["updated"] = "just now";
+
+      for (ble_dev in ble_devices) {
+        if (ble_devices.hasOwnProperty(ble_dev))
+          $('#ble_devices_table').append(
+            '<tr><td>' +
+              ble_dev +
+              '</td><td>' +
+              JSON.stringify(ble_devices[ble_dev]) +
+              '</td></tr>',
+          )
+      }
+
+      for (mtb_dev in mtb_devices) {
+        if (mtb_devices.hasOwnProperty(mtb_dev))
+          $('#mtb_devices_table').append(
+            '<tr><td>' +
+              mtb_dev +
+              '</td><td>' +
+              JSON.stringify(mtb_devices[mtb_dev]) +
+              '</td></tr>',
+          )
+      }
+
+      drawBoard()
     }
+    xhttp.open('GET', '/api/mqtt', true)
+    xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+    xhttp.send()
+  }
 
-    function updateGatewayLocations() {
-        var radius = 12;
-        var canvas = document.getElementById("canvas");
-        var context = canvas.getContext("2d")
+  setInterval(update_mqtt, 5000)
 
-        context.clearRect(0, 0, canvas.width, canvas.height);
+  var scaleX = 5
+  var scaleY = 3
 
-        var scaleX = $("#scale_x").val();
-        var scaleY = $("#scale_y").val();
-
-        for (var i = 1; i <= 4; i++) {
-            var centerX = parseInt($("#mtb" + i.toString() + "_x").val());
-            var centerY = parseInt($("#mtb" + i.toString() + "_y").val());
-            context.beginPath();
-            context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false);
-            context.fillStyle = '#0000FF';
-            context.fill();
-            context.lineWidth = 1;
-            context.strokeStyle = 'white';
-            context.stroke();
-
-            // change font and font-size for better visibilty
-            context.font = "20px Open Sans,sans-serif";
-            context.fillStyle = 'white';
-            // draw "Test text" at X = 10 and Y = 30
-            context.fillText(i.toString(), centerX - 5, centerY + 8);
-        }
+  function send_command() {
+    console.log('sending http request')
+    const xhttp = new XMLHttpRequest()
+    xhttp.onload = function () {
+      document.getElementById('output').value = this.responseText
     }
+    xhttp.open('POST', '/device/{{eui}}', true)
+    xhttp.setRequestHeader('Content-type', 'application/json; charset=UTF-8')
+    xhttp.send(
+      JSON.stringify({ command: document.getElementById('command').value }),
+    )
+  }
 
+  var mouse_x, mouse_y
 
-    window.onload = function () {
-        update_mqtt();
-        drawBoard();
+  var locator_colors = [
+    '#FF3300',
+    '#FFFF00',
+    '#00CC00',
+    '#0099FF',
+    '#0000FF',
+    '#9900CC',
+    '#FF0099',
+  ]
 
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    if (w < 2 * r) r = w / 2
+    if (h < 2 * r) r = h / 2
+    this.beginPath()
+    this.moveTo(x + r, y)
+    this.arcTo(x + w, y, x + w, y + h, r)
+    this.arcTo(x + w, y + h, x, y + h, r)
+    this.arcTo(x, y + h, x, y, r)
+    this.arcTo(x, y, x + w, y, r)
+    this.closePath()
+    return this
+  }
 
-        var i = 1;
-        for (eui in mtb_devices) {
-            $("#mtb" + i++ + "_eui").val(eui);
-        }
-    };
+  function drawBoard() {
+    var radius = 7
 
+    var scaleX = $('#scale_x').val()
+    var scaleY = $('#scale_y').val()
 
+    // Convert RSSI to approx distance from each gateway
+    // Calculate X,Y from circle intersection
+
+    var canvas = document.getElementById('canvas')
+    var context = canvas.getContext('2d')
+
+    updateGatewayLocations()
+
+    var i = 0
+
+    for (ble_addr in ble_devices) {
+      var rssi = JSON.parse(JSON.stringify(ble_devices[ble_addr]['rssi']))
+
+      for (var j = 0; j < 4; j++) {
+        if (rssi[j] == null) rssi[j] = min_rssi
+        else rssi[j] = parseFloat(rssi[j])
+      }
+
+      var centerX =
+        (parseInt($('#mtb1_x').val()) +
+          parseInt($('#mtb2_x').val()) +
+          parseInt($('#mtb3_x').val()) +
+          parseInt($('#mtb4_x').val())) /
+        4
+      centerX += (rssi[2] - rssi[0]) * scaleX
+      centerX += (rssi[3] - rssi[1]) * scaleX
+      var centerY =
+        (parseInt($('#mtb1_y').val()) +
+          parseInt($('#mtb2_y').val()) +
+          parseInt($('#mtb3_y').val()) +
+          parseInt($('#mtb4_y').val())) /
+        4
+      centerY += (rssi[1] - rssi[0]) * scaleY
+      centerY += (rssi[3] - rssi[2]) * scaleY
+
+      console.log('update position', centerX, centerY)
+
+      context.beginPath()
+      context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false)
+      context.fillStyle = locator_colors[i++]
+      context.fill()
+      context.globalAlpha = 0.75 // set global alpha
+      context.lineWidth = 1
+      context.strokeStyle = 'black'
+      context.stroke()
+      context.beginPath()
+      context.globalAlpha = 0.3 // set global alpha
+      context.arc(centerX - 2, centerY - 2, 4, 0, 2 * Math.PI, false)
+      context.fillStyle = 'grey'
+      context.fill()
+
+      context.beginPath()
+      context.globalAlpha = 0.1 // set global alpha
+      context.arc(centerX - 2, centerY - 2, 2, 0, 2 * Math.PI, false)
+      context.fillStyle = 'white'
+      context.fill()
+      context.beginPath()
+      context.globalAlpha = 0.7 // set global alpha
+      context.arc(centerX - 2, centerY - 2, 1, 0, 2 * Math.PI, false)
+      context.fillStyle = 'white'
+      context.fill()
+
+      context.globalAlpha = 0.25 // set global alpha
+      context.beginPath()
+      context.roundRect(centerX + 10, centerY - 28, 140, 60, 10)
+      context.fillStyle = '#000000'
+      context.fill()
+      context.beginPath()
+      context.roundRect(centerX + 13, centerY - 24, 132, 52, 10)
+      context.fillStyle = '#000000'
+      context.fill()
+      context.beginPath()
+      context.roundRect(centerX + 15, centerY - 20, 124, 44, 10)
+      context.fillStyle = '#000000'
+      context.fill()
+
+      context.globalAlpha = 1.0
+
+      // change font and font-size for better visibilty
+      context.font = '20px Open Sans,sans-serif'
+      context.fillStyle = 'white'
+      // draw "Test text" at X = 10 and Y = 30
+      context.fillText(ble_addr, centerX + 21, centerY)
+
+      context.fillText(
+        ble_devices[ble_addr]['updated'],
+        centerX + 21,
+        centerY + 17,
+      )
+    }
+  }
+
+  function updateGatewayLocations() {
+    var radius = 12
+    var canvas = document.getElementById('canvas')
+    var context = canvas.getContext('2d')
+
+    context.clearRect(0, 0, canvas.width, canvas.height)
+
+    var scaleX = $('#scale_x').val()
+    var scaleY = $('#scale_y').val()
+
+    for (var i = 1; i <= 4; i++) {
+      var centerX = parseInt($('#mtb' + i.toString() + '_x').val())
+      var centerY = parseInt($('#mtb' + i.toString() + '_y').val())
+      context.beginPath()
+      context.arc(centerX, centerY, radius, 0, 2 * Math.PI, false)
+      context.fillStyle = '#0000FF'
+      context.fill()
+      context.lineWidth = 1
+      context.strokeStyle = 'white'
+      context.stroke()
+
+      // change font and font-size for better visibilty
+      context.font = '20px Open Sans,sans-serif'
+      context.fillStyle = 'white'
+      // draw "Test text" at X = 10 and Y = 30
+      context.fillText(i.toString(), centerX - 5, centerY + 8)
+    }
+  }
+
+  window.onload = function () {
+    update_mqtt()
+    drawBoard()
+
+    var i = 1
+    for (eui in mtb_devices) {
+      $('#mtb' + i++ + '_eui').val(eui)
+    }
+  }
 </script>
 
-{% endblock %}
-{% block content %}
+{% endblock %} {% block content %}
 
 <div class="row grid-responsive">
-
-    <div class="column column-75">
-        <div class="row">
-            <div class="column">
-                <div class="card">
-                    <div class="card-title">
-                        <h2>Warehouse One</h2>
-                    </div>
-                    <div class="card-block">
-                        <div class="outsideWrapper">
-                            <div class="insideWrapper">
-                                <img src="/static/images/office-layout.jpg" class="coveredImage" />
-                                <canvas id="canvas" class="coveringCanvas" width=1200 height=800></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="row">
-            <div class="column">
-                <div class="card">
-                    <div class="card-title">
-                        <h2>MTB Gateway Locations</h2>
-                    </div>
-                    <div class="card-block">
-                        <div class="row">
-                            <div class="column">
-                                <label for="mtb1_x">MTB 1 X-POS</label>
-                                <input type="text" name="mtb1_x" id="mtb1_x" value="80">
-                            </div>
-                            <div class="column">
-                                <label for="mtb1_y">MTB 1 Y-POS</label>
-                                <input type="text" name="mtb1_y" id="mtb1_y" value="60">
-                            </div>
-                            <div class="column">
-                                <label for="mtb2_x">MTB 2 X-POS</label>
-                                <input type="text" name="mtb2_x" id="mtb2_x" value="300">
-                            </div>
-                            <div class="column">
-                                <label for="mtb2_y">MTB 2 Y-POS</label>
-                                <input type="text" name="mtb2_y" id="mtb2_y" value="600">
-                            </div>
-                            <div class="column">
-                                <label for="scale_x">Scale X</label>
-                                <input type="text" name="scale_x" id="scale_x" value="5">
-                            </div>
-                        </div>
-                        <div class=" row">
-                            <div class="column">
-                                <label for="mtb3_x">MTB 3 X-POS</label>
-                                <input type="text" name="mtb3_x" id="mtb3_x" value="1120">
-                            </div>
-                            <div class="column">
-                                <label for="mtb3_y">MTB 3 Y-POS</label>
-                                <input type="text" name="mtb3_y" id="mtb3_y" value="60">
-                            </div>
-                            <div class="column">
-                                <label for="mtb4_x">MTB 4 X-POS</label>
-                                <input type="text" name="mtb4_x" id="mtb4_x" value="1120">
-                            </div>
-                            <div class="column">
-                                <label for="mtb4_y">MTB 4 Y-POS</label>
-                                <input type="text" name="mtb4_y" id="mtb4_y" value="700">
-                            </div>
-                            <div class="column">
-                                <label for="scale_y">Scale Y</label>
-                                <input type="text" name="scale_y" id="scale_y" value="3">
-                            </div>
-                        </div>
-                        <div class="row">
-                            <div class="column">
-                                <input class="button-primary" type="button" value="Update Gateways"
-                                    onclick="updateGatewayLocations()">
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="column column-25">
+  <div class="column column-75">
+    <div class="row">
+      <div class="column">
         <div class="card">
-            <div class="card-title">
-                <h3>Device </h3>
+          <div class="card-title">
+            <h2>Warehouse One</h2>
+          </div>
+          <div class="card-block">
+            <div class="outsideWrapper">
+              <div class="insideWrapper">
+                <img
+                  src="/static/images/office-layout.jpg"
+                  class="coveredImage"
+                />
+                <canvas
+                  id="canvas"
+                  class="coveringCanvas"
+                  width="1200"
+                  height="800"
+                ></canvas>
+              </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="column">
+        <div class="card">
+          <div class="card-title">
+            <h2>MTB Gateway Locations</h2>
+          </div>
+          <div class="card-block">
+            <div class="row">
+              <div class="column">
+                <label for="mtb1_x">MTB 1 X-POS</label>
+                <input type="text" name="mtb1_x" id="mtb1_x" value="80" />
+              </div>
+              <div class="column">
+                <label for="mtb1_y">MTB 1 Y-POS</label>
+                <input type="text" name="mtb1_y" id="mtb1_y" value="60" />
+              </div>
+              <div class="column">
+                <label for="mtb2_x">MTB 2 X-POS</label>
+                <input type="text" name="mtb2_x" id="mtb2_x" value="300" />
+              </div>
+              <div class="column">
+                <label for="mtb2_y">MTB 2 Y-POS</label>
+                <input type="text" name="mtb2_y" id="mtb2_y" value="600" />
+              </div>
+              <div class="column">
+                <label for="scale_x">Scale X</label>
+                <input type="text" name="scale_x" id="scale_x" value="5" />
+              </div>
+            </div>
+            <div class="row">
+              <div class="column">
+                <label for="mtb3_x">MTB 3 X-POS</label>
+                <input type="text" name="mtb3_x" id="mtb3_x" value="1120" />
+              </div>
+              <div class="column">
+                <label for="mtb3_y">MTB 3 Y-POS</label>
+                <input type="text" name="mtb3_y" id="mtb3_y" value="60" />
+              </div>
+              <div class="column">
+                <label for="mtb4_x">MTB 4 X-POS</label>
+                <input type="text" name="mtb4_x" id="mtb4_x" value="1120" />
+              </div>
+              <div class="column">
+                <label for="mtb4_y">MTB 4 Y-POS</label>
+                <input type="text" name="mtb4_y" id="mtb4_y" value="700" />
+              </div>
+              <div class="column">
+                <label for="scale_y">Scale Y</label>
+                <input type="text" name="scale_y" id="scale_y" value="3" />
+              </div>
+            </div>
+            <div class="row">
+              <div class="column">
+                <input
+                  class="button-primary"
+                  type="button"
+                  value="Update Gateways"
+                  onclick="updateGatewayLocations()"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="column column-25">
+    <div class="card">
+      <div class="card-title">
+        <h3>Device</h3>
+      </div>
 
-            <div class="card-block">
-                <form>
-                    <fieldset>
-                        <!--
+      <div class="card-block">
+        <form>
+          <fieldset>
+            <!--
                         <label for="at_port">AT Port</label>
                         <input type="input" name="at_port" id="at_port" />
 
@@ -548,145 +625,179 @@
                         <input type="input" name="debug_port" id="debug_port" />
 -->
 
-                        <label for="simulate">Simulate Device</label>
-                        <select name="simulate" id="simulate" onchange="simulate_change()">
-                            <option>Manual</option>
-                            <option>Locator Tag V1</option>
-                        </select>
+            <label for="simulate">Simulate Device</label>
+            <select name="simulate" id="simulate" onchange="simulate_change()">
+              <option>Manual</option>
+              <option>Locator Tag V1</option>
+            </select>
 
-                        <div class="row">
-                            <div class="column column-75">
-                                <label for="mtb1_eui">MTB EUI 1</label>
-                                <input type="text" name="mtb1_eui" id="mtb1_eui">
-                            </div>
-                            <div class="column column-25">
-                                <label for="mtb1_rssi">RSSI</label>
-                                <input type="text" name="mtb1_rssi" id="mtb1_rssi" value="-75">
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="column column-75">
-                                <label for="mtb2_eui">MTB EUI 2</label>
-                                <input type="text" name="mtb2_eui" id="mtb2_eui">
-                            </div>
-                            <div class="column column-25">
-                                <label for="mtb2_rssi">RSSI</label>
-                                <input type="text" name="mtb2_rssi" id="mtb2_rssi" value="-75">
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="column column-75">
-                                <label for="mtb3_eui">MTB EUI 3</label>
-                                <input type="text" name="mtb3_eui" id="mtb3_eui">
-                            </div>
-                            <div class="column column-25">
-                                <label for="mtb3_rssi">RSSI</label>
-                                <input type="text" name="mtb3_rssi" id="mtb3_rssi" value="-75">
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="column column-75">
-                                <label for="mtb4_eui">MTB EUI 4</label>
-                                <input type="text" name="mtb4_eui" id="mtb4_eui">
-                            </div>
-                            <div class="column column-25">
-                                <label for="mtb4_rssi">RSSI</label>
-                                <input type="text" name="mtb4_rssi" id="mtb4_rssi" value="-75">
-                            </div>
-                        </div>
-
-                        <br>
-                        <input class="button-primary" type="button" value="Build Command" onclick="build_command()">
-
-                        <label for="command">Command</label>
-                        <input type="text" name="command" id="command">
-
-                        <br>
-                        <input class="button-primary" type="button" value="Send Command" onclick="send_command()">
-                        <input class="button-primary" type="button" value="Update Position" onclick="drawBoard()">
-
-                        <label for="output">Output</label>
-                        <textarea name="output" id="output" style="min-height:100px"></textarea>
-
-                    </fieldset>
-                </form>
+            <div class="row">
+              <div class="column column-75">
+                <label for="mtb1_eui">MTB EUI 1</label>
+                <input type="text" name="mtb1_eui" id="mtb1_eui" />
+              </div>
+              <div class="column column-25">
+                <label for="mtb1_rssi">RSSI</label>
+                <input
+                  type="text"
+                  name="mtb1_rssi"
+                  id="mtb1_rssi"
+                  value="-75"
+                />
+              </div>
             </div>
-        </div>
+
+            <div class="row">
+              <div class="column column-75">
+                <label for="mtb2_eui">MTB EUI 2</label>
+                <input type="text" name="mtb2_eui" id="mtb2_eui" />
+              </div>
+              <div class="column column-25">
+                <label for="mtb2_rssi">RSSI</label>
+                <input
+                  type="text"
+                  name="mtb2_rssi"
+                  id="mtb2_rssi"
+                  value="-75"
+                />
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="column column-75">
+                <label for="mtb3_eui">MTB EUI 3</label>
+                <input type="text" name="mtb3_eui" id="mtb3_eui" />
+              </div>
+              <div class="column column-25">
+                <label for="mtb3_rssi">RSSI</label>
+                <input
+                  type="text"
+                  name="mtb3_rssi"
+                  id="mtb3_rssi"
+                  value="-75"
+                />
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="column column-75">
+                <label for="mtb4_eui">MTB EUI 4</label>
+                <input type="text" name="mtb4_eui" id="mtb4_eui" />
+              </div>
+              <div class="column column-25">
+                <label for="mtb4_rssi">RSSI</label>
+                <input
+                  type="text"
+                  name="mtb4_rssi"
+                  id="mtb4_rssi"
+                  value="-75"
+                />
+              </div>
+            </div>
+
+            <br />
+            <input
+              class="button-primary"
+              type="button"
+              value="Build Command"
+              onclick="build_command()"
+            />
+
+            <label for="command">Command</label>
+            <input type="text" name="command" id="command" />
+
+            <br />
+            <input
+              class="button-primary"
+              type="button"
+              value="Send Command"
+              onclick="send_command()"
+            />
+            <input
+              class="button-primary"
+              type="button"
+              value="Update Position"
+              onclick="drawBoard()"
+            />
+
+            <label for="output">Output</label>
+            <textarea
+              name="output"
+              id="output"
+              style="min-height: 100px"
+            ></textarea>
+          </fieldset>
+        </form>
+      </div>
     </div>
+  </div>
 </div>
 <h5>MTB Meta-data</h5>
 <div class="row grid-responsive">
-    <div class="column">
-        <div class="card">
-            <div class="card-title">
-                <div class=" card-block">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th width="220px">EUI</th>
-                                <th width="220px">Last LoRa Info</th>
-                            </tr>
-                        </thead>
-                        <tbody id="mtb_devices_table">
-
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+  <div class="column">
+    <div class="card">
+      <div class="card-title">
+        <div class="card-block">
+          <table>
+            <thead>
+              <tr>
+                <th width="220px">EUI</th>
+                <th width="220px">Last LoRa Info</th>
+              </tr>
+            </thead>
+            <tbody id="mtb_devices_table"></tbody>
+          </table>
         </div>
+      </div>
     </div>
+  </div>
 </div>
 <h5>B&D Device Data</h5>
 <div class="row grid-responsive">
-    <div class="column">
-        <div class="card">
-            <div class="card-title">
-                <div class=" card-block">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th width="220px">MAC Addr</th>
-                                <th width="220px">RSSI Values</th>
-                            </tr>
-                        </thead>
-                        <tbody id="ble_devices_table">
-
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+  <div class="column">
+    <div class="card">
+      <div class="card-title">
+        <div class="card-block">
+          <table>
+            <thead>
+              <tr>
+                <th width="220px">MAC Addr</th>
+                <th width="220px">RSSI Values</th>
+              </tr>
+            </thead>
+            <tbody id="ble_devices_table"></tbody>
+          </table>
         </div>
+      </div>
     </div>
+  </div>
 </div>
-<h5>Application Messages (<a
-        href="https://multitech.atlassian.net/wiki/spaces/MBE/pages/2400977174/LoRa+Data+Format">LoRa Data
-        Format</a>)
+<h5>
+  Application Messages (<a
+    href="https://multitech.atlassian.net/wiki/spaces/MBE/pages/2400977174/LoRa+Data+Format"
+    >LoRa Data Format</a
+  >)
 </h5>
 <div class="row grid-responsive">
-    <div class="column">
-        <div class="card">
-            <div class="card-title">
-                <div class=" card-block">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th width="240px">DevEUI</th>
-                                <th width="240px">GwEUI</th>
-                                <th width="220px">Time</th>
-                                <th>Message</th>
-                            </tr>
-                        </thead>
-                        <tbody id="app_messages_table">
-
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+  <div class="column">
+    <div class="card">
+      <div class="card-title">
+        <div class="card-block">
+          <table>
+            <thead>
+              <tr>
+                <th width="240px">DevEUI</th>
+                <th width="240px">GwEUI</th>
+                <th width="220px">Time</th>
+                <th>Message</th>
+              </tr>
+            </thead>
+            <tbody id="app_messages_table"></tbody>
+          </table>
         </div>
+      </div>
     </div>
+  </div>
 </div>
 
 {% endblock %}

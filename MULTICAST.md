@@ -5,12 +5,15 @@ This example is using Dot v4.0.0 firmware and mPower 5.3.0 on Conduit
 ## AT Commands
 
 ### Setup the output format
+
 Enable addition of Type, DevAddr, FCnt and Port to HEX output of the data. Use AT+RXO=2 for ascii output instead of hexadeicmal.
 
 ```
 AT+RXO=3
 ```
+
 Packet output will contain a set of fields, Type is 1 byte, DevAddr is 4 bytes, FCnt is 4 bytes and Port is 1 byte. DevAddr and FCnt are presented in little endian order. The Data field is provided as received.
+
 ```
 012f49daf00500000001090909
 
@@ -18,11 +21,12 @@ Type  DevAddr   FCnt      Port  Data
 01    2f49daf0  05000000  01    090909
 ```
 
-
 Enable output of unsolicited messages during the AT command session
+
 ```
 AT+URC=1
 ```
+
 Received packets will appear in the command output without needing to issue commands.
 
 ```
@@ -30,13 +34,13 @@ RECV 012f49daf00500000001090909
 ```
 
 The last packet can be displayed with the AT+RECV command.
+
 ```
 at+recv
 012f49daf00500000001090909
 
 OK
 ```
-
 
 # Multicast Session Setup
 

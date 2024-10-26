@@ -1,4 +1,5 @@
 # lorawan-app-connect
+
 Default mPower&trade; LoRaWAN&reg; application and server API implementation for a distributed LoRaWAN network. The application will communicate with the embedded LoRaWAN network server on a MultiTech Conduit&reg; and forward messages to the configured HTTP(S) or MQTT(S) servers. Configuration for a single server can be provided via the mPower WebUI or for multiple servers using the [MultiTech Lens&reg;](https://www.multitech.com/brands/lens) cloud service.
 
 The default application feature allows last mile bi-directional connectivity from the gateway to a cloud application without needing to deploy custom code on each gateway. An existing API can add compatible end-points allowing LoRaWAN uplinks and downlinks to be consumed and produced by the cloud application.
@@ -11,9 +12,8 @@ The diagram below show the components for a distributed LoRaWAN network using Mu
 
 ![Components](/images/3rd%20Party%20API.png)
 
-
-
 # Network Messages
+
 The diagram below shows the messages passed between a LoRaWAN end-device (Dot), LoRaWAN Network Server (Conduit), LoRaWAN Join Server and Application/Network Management Server (Lens) and a 3rd Party API.
 
 ![Ladder Diagram](/images/3rd-Party-API-Ladder.png)
@@ -33,7 +33,6 @@ In the diagram the Class A Rx1 Offset has been increased to five seconds to allo
 11. The 3rd Party API can response to the Uplink message with a list of downlinks
 12. The Conduit will periodically request downlink packets from the 3rd Party API
 13. The Conduit will schedule received downlinks for transmission to a Dot
-
 
 # Installation
 
@@ -73,72 +72,73 @@ A default application can be configured using mPower 5.3.x firmware.
 
 ### Paths
 
-* POST /api/lorawan/v1/\<APP-EUI>/\<GW-UUID>/init
-  * BODY
+- POST /api/lorawan/v1/\<APP-EUI>/\<GW-UUID>/init
+
+  - BODY
     ```json
-    { "gateways_euis": [ "00-80-00-00-a0-00-0f-4d" ] }
+    { "gateways_euis": ["00-80-00-00-a0-00-0f-4d"] }
     ```
-  * RESPONSE
-    * The response can contain configuration data for the application on Conduit.
-      * Timeout in seconds for HTTP requests
-      * Queue size for the number of requests to retain while disconnected
-      * Downlink query interval for the number of seconds between HTTP requests for downlinks
+  - RESPONSE
+    - The response can contain configuration data for the application on Conduit.
+      - Timeout in seconds for HTTP requests
+      - Queue size for the number of requests to retain while disconnected
+      - Downlink query interval for the number of seconds between HTTP requests for downlinks
     ```json
     {
-        "timeout": 20,
-        "queue_size": 10,
-        "downlink_query_interval": 30
+      "timeout": 20,
+      "queue_size": 10,
+      "downlink_query_interval": 30
     }
     ```
 
+- POST /api/lorawan/v1/\<APP-EUI>/\<GW-UUID>/close
 
-* POST /api/lorawan/v1/\<APP-EUI>/\<GW-UUID>/close
+- POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/up
 
-* POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/up
-  * Field descriptions can be found on [multitech.net](https://www.multitech.net/developer/software/lora/lora-network-server/mqtt-messages/)
-    * BODY
+  - Field descriptions can be found on [multitech.net](https://www.multitech.net/developer/software/lora/lora-network-server/mqtt-messages/)
+    - BODY
     ```json
     {
-        "tmst": 2450008103,
-        "time": "2020-09-16T18:29:35.263610Z",
-        "tmms": 1284316193263,
-        "chan": 8,
-        "rfch": 0,
-        "freq": 904.6,
-        "stat": 1,
-        "modu": "LORA",
-        "datr": "SF8BW500",
-        "codr": "4/5",
-        "lsnr": 10,
-        "rssi": -66,
-        "opts": "",
-        "size": 7,
-        "fcnt": 27,
-        "cls": 0,
-        "port": 1,
-        "mhdr": "4012233112801b00",
-        "data": "bWVzc2FnZQ==",
-        "appeui": "16-ea-76-f6-ab-66-3d-80",
-        "deveui": "00-80-00-00-00-01-58-34",
-        "devaddr": "12312312",
-        "ack": false,
-        "adr": true,
-        "gweui": "00-80-00-00-a0-00-0f-4d",
-        "seqn": 27
+      "tmst": 2450008103,
+      "time": "2020-09-16T18:29:35.263610Z",
+      "tmms": 1284316193263,
+      "chan": 8,
+      "rfch": 0,
+      "freq": 904.6,
+      "stat": 1,
+      "modu": "LORA",
+      "datr": "SF8BW500",
+      "codr": "4/5",
+      "lsnr": 10,
+      "rssi": -66,
+      "opts": "",
+      "size": 7,
+      "fcnt": 27,
+      "cls": 0,
+      "port": 1,
+      "mhdr": "4012233112801b00",
+      "data": "bWVzc2FnZQ==",
+      "appeui": "16-ea-76-f6-ab-66-3d-80",
+      "deveui": "00-80-00-00-00-01-58-34",
+      "devaddr": "12312312",
+      "ack": false,
+      "adr": true,
+      "gweui": "00-80-00-00-a0-00-0f-4d",
+      "seqn": 27
     }
     ```
-  * RESPONSE
-    * The API can send any downlinks in the response
+  - RESPONSE
+
+    - The API can send any downlinks in the response
+
     ```json
-    [
-        {"deveui":"00-11-22-33-44-55-66-77", "data": "AQ=="}
-    ]
+    [{ "deveui": "00-11-22-33-44-55-66-77", "data": "AQ==" }]
     ```
 
-  * POST /api/lorawan/v1/\<APP-EUI>/up
-  * If more than one uplink is available to be sent, up to ten may be sent in an array to the APP-EUI uplink path, this helps if many uplinks are being received in a burst.
-  * Field descriptions can be found on [multitech.net](https://www.multitech.net/developer/software/lora/lora-network-server/mqtt-messages/)
-    * BODY
+  - POST /api/lorawan/v1/\<APP-EUI>/up
+  - If more than one uplink is available to be sent, up to ten may be sent in an array to the APP-EUI uplink path, this helps if many uplinks are being received in a burst.
+  - Field descriptions can be found on [multitech.net](https://www.multitech.net/developer/software/lora/lora-network-server/mqtt-messages/)
+    - BODY
     ```json
     [
       {
@@ -182,45 +182,40 @@ A default application can be configured using mPower 5.3.x firmware.
       }
     ]
     ```
-  * RESPONSE
-    * The API can send any downlinks in the response
+  - RESPONSE
+    - The API can send any downlinks in the response
     ```json
-    [
-        {"deveui":"00-11-22-33-44-55-66-77", "data": "AQ=="}
-    ]
+    [{ "deveui": "00-11-22-33-44-55-66-77", "data": "AQ==" }]
     ```
 
-* POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/joined
-    ```json
-    {
-        "appeui": "16-ea-76-f6-ab-66-3d-80",
-        "gweui": "00-80-00-00-a0-00-0f-4d",
-        "remote": false
-    }
-    ```
+- POST /api/lorawan/v1/\<APP-EUI>/\<DEV-EUI>/joined
 
-* GET  /api/lorawan/v1/\<APP-EUI>/down
-    * Provides a list of DEV-EUI values
-    * Returns list of downlinks to queue
-    ```json
-    [
-        {"deveui":"00-11-22-33-44-55-66-77", "data": "AQ=="}
-    ]
-    ```
+  ```json
+  {
+    "appeui": "16-ea-76-f6-ab-66-3d-80",
+    "gweui": "00-80-00-00-a0-00-0f-4d",
+    "remote": false
+  }
+  ```
+
+- GET /api/lorawan/v1/\<APP-EUI>/down
+  - Provides a list of DEV-EUI values
+  - Returns list of downlinks to queue
+  ```json
+  [{ "deveui": "00-11-22-33-44-55-66-77", "data": "AQ==" }]
+  ```
 
 ### TLS Certificates
 
 [Linux Certificate Doc](https://www.golinuxcloud.com/openssl-create-client-server-certificate/)
 
-* server_cert.pem - Public cerificate given out to connecting clients for server authentication
-* server_key.pem - Private key used to create client certificates for client authentication
-
-
-
+- server_cert.pem - Public cerificate given out to connecting clients for server authentication
+- server_key.pem - Private key used to create client certificates for client authentication
 
 # MQTT Applications
 
 ## Application configuration
+
     url: mqtts://test.mosquitto.org:8883
     options:
       server_cert: server certificate
@@ -231,41 +226,43 @@ A default application can be configured using mPower 5.3.x firmware.
 
 ## MQTT Protocol
 
-* Publishes
-  * lorawan/\<APP-EUI>/\<GW-UUID>/init
-  * lorawan/\<APP-EUI>/\<GW-UUID>/close
-  * lorawan/\<APP-EUI>/\<GW-UUID>/disconnected
-  * lorawan/\<APP-EUI>/\<DEV-EUI>/up
-  * lorawan/\<APP-EUI>/\<DEV-EUI>/joined
-  * lorawan/\<GW-EUI>/\<DEV-EUI>/moved
+- Publishes
 
-* Subscribed
-  * lorawan/\<APP-EUI>/\<DEV-EUI>/+
-  * lorawan/\<GW-EUI>/\<DEV-EUI>/+
-  * lorawan/\<GW-UUID>/\<DEV-EUI>/+
+  - lorawan/\<APP-EUI>/\<GW-UUID>/init
+  - lorawan/\<APP-EUI>/\<GW-UUID>/close
+  - lorawan/\<APP-EUI>/\<GW-UUID>/disconnected
+  - lorawan/\<APP-EUI>/\<DEV-EUI>/up
+  - lorawan/\<APP-EUI>/\<DEV-EUI>/joined
+  - lorawan/\<GW-EUI>/\<DEV-EUI>/moved
 
-  * Supported topics
-    * down - downlinks to schedule
-    * clear - clear downlinks for a device
-    * api_req - send API request
-    * lora_req - send request for lora-query utility
-    * log_req - send request for log file
-      * lines - number of lines to returned
-      * file - name of file to read from /var/log folder
+- Subscribed
+
+  - lorawan/\<APP-EUI>/\<DEV-EUI>/+
+  - lorawan/\<GW-EUI>/\<DEV-EUI>/+
+  - lorawan/\<GW-UUID>/\<DEV-EUI>/+
+
+  - Supported topics
+    - down - downlinks to schedule
+    - clear - clear downlinks for a device
+    - api_req - send API request
+    - lora_req - send request for lora-query utility
+    - log_req - send request for log file
+      - lines - number of lines to returned
+      - file - name of file to read from /var/log folder
 
 ### Test brokers
 
-* https://test.mosquitto.org/
-  * Supports TLS1.2 server certificate, client certificate and apikey settings for authentication
-  * Application configuration
-    * url: mqtts://test.mosquitto.org:8883
-    * options:
-      * server_cert: server certificate
-      * clent_cert: client certicate
-      * apikey: client private key
-* https://flespi.com/mqtt-api
-  * Supports authentication using username access token for authentication
-  * Application configuration
-    * url: mqtt://mqtt.flespi.io
-    * options:
-      * username: \<FLESPI-TOKEN>
+- https://test.mosquitto.org/
+  - Supports TLS1.2 server certificate, client certificate and apikey settings for authentication
+  - Application configuration
+    - url: mqtts://test.mosquitto.org:8883
+    - options:
+      - server_cert: server certificate
+      - clent_cert: client certicate
+      - apikey: client private key
+- https://flespi.com/mqtt-api
+  - Supports authentication using username access token for authentication
+  - Application configuration
+    - url: mqtt://mqtt.flespi.io
+    - options:
+      - username: \<FLESPI-TOKEN>
