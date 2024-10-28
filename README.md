@@ -135,7 +135,7 @@ A default application can be configured using mPower 5.3.x firmware.
     [{ "deveui": "00-11-22-33-44-55-66-77", "data": "AQ==" }]
     ```
 
-  - POST /api/lorawan/v1/\<APP-EUI>/up
+- POST /api/lorawan/v1/\<APP-EUI>/up
   - If more than one uplink is available to be sent, up to ten may be sent in an array to the APP-EUI uplink path, this helps if many uplinks are being received in a burst.
   - Field descriptions can be found on [multitech.net](https://www.multitech.net/developer/software/lora/lora-network-server/mqtt-messages/)
     - BODY
