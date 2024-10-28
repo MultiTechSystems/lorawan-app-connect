@@ -31,3 +31,7 @@ pnpm-lock.yaml
 
 # Testing
 coverage
+
+# Minified files
+*.min.js
+*.min.css
