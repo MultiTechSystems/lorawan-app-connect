@@ -50,6 +50,7 @@ app_version = "1.0.0"
 
 api_v1_0 = "1.0"
 api_v1_1 = "1.1"
+api_v1_1_1 = "1.1.1"
 
 
 def custom_app_uplink_handler(app, topic, msg):
@@ -150,13 +151,9 @@ app_mqtt_v1_1_downlink_topic = "lorawan/%s/down"
 app_mqtt_v1_1_joined_topic = "lorawan/%s/%s/%s/joined"
 app_mqtt_v1_1_uplink_topic = "lorawan/%s/%s/%s/up"
 app_mqtt_v1_1_moved_topic = "lorawan/%s/%s/%s/moved"
-app_mqtt_v1_1_subscribe_clear_topic = "lorawan/%s/%s/%s/clear"
 
-# The following combinations can be used to address the application from the broker to manage downlinks:
-#  lorawan/<GW-UUID>/down
-#  lorawan/<GW-UUID>/clear
 
-app_mqtt_v1_1_subscribe_down_topic = "lorawan/%s/down"
+
 
 # This application will subscribe to the following topics using appeui and gwuuid
 # The Default App configured appeui will be used for these topics
@@ -179,9 +176,17 @@ app_mqtt_v1_1_api_result_topic = "lorawan/%s/api_res"
 app_mqtt_v1_1_log_result_topic = "lorawan/%s/log_res"
 
 
+app_mqtt_v1_1_1_connected_topic = "lorawan/%s/connected"
+app_mqtt_v1_1_1_subscribe_clear_topic = "lorawan/%s/clear"
+
+
 topic_v1_1_list = [
-    app_mqtt_v1_1_subscribe_down_topic,
-    app_mqtt_v1_1_subscribe_clear_topic,
+    app_mqtt_v1_1_downlink_topic,
+]
+
+topic_v1_1_1_list = [
+    app_mqtt_v1_1_downlink_topic,
+    app_mqtt_v1_1_1_subscribe_clear_topic,
 ]
 
 app_default_v1_1_mqtt_uplink_topic = "lorawan/%(gwuuid)s/%(appeui)s/%(deveui)s/up"
@@ -249,12 +254,21 @@ def setup_mqtt_app(app_net):
     if "clean_session" in app_net["options"]:
         clean_session = app_net["options"]["clean_session"]
 
-    mqtt_clients[app_net["eui"]] = mqtt.Client(client_id, clean_session, app_net)
+    if re.match("^mqtt(s)?://", app_net["url"]):
+        mqtt_clients[app_net["eui"]] = mqtt.Client(client_id, clean_session, app_net)
+    elif re.match("^wss://", app_net["url"]):
+        mqtt_clients[app_net["eui"]] = mqtt.Client(client_id, clean_session, app_net, transport="websockets")
+        if ("/" in parts[2]):
+            p = parts[2].split("/")
+            parts[2] = p[0]
+            parts.append("/" + "/".join(p[1:]))
+            logging.debug("WebSocket add path", parts[3])
+            mqtt_clients[app_net["eui"]].ws_set_options(path=parts[3])
 
     apps[app_net["eui"]]["isMqtt"] = True
     apps[app_net["eui"]]["isHttp"] = False
 
-    if re.match("^mqtts://", app_net["url"]):
+    if re.match("^(mqtts|wss)://", app_net["url"]):
         temp = None
         ca_file = None
         reqs = None
@@ -356,7 +370,7 @@ def setup_mqtt_app(app_net):
                 }
             )
 
-            if default_app["apiVersion"] == api_v1_1:
+            if default_app["apiVersion"].startswith(api_v1_1):
                 topic = app_mqtt_v1_1_init_topic % (gw_uuid)
             else:
                 topic = app_mqtt_init_topic % (app_net["eui"], gw_uuid)
@@ -432,12 +446,22 @@ def setup_http_app(app_net):
 
         # Create a connection to submit HTTP requests
         port = 443
+
         if len(parts) == 3:
+            
+            if ("/" in parts[2]):
+                p = parts[2].split("/")
+                parts[2] = p[0]
+                parts.append("/" + "/".join(p[1:]))
+                app_net["options"]["prefix"] = parts[3]
+
             port = int(parts[2])
 
         http_clients[app_net["eui"]] = http.client.HTTPSConnection(
             parts[1][2:], port, context=context, timeout=request_timeout
         )
+
+        
 
     else:
         port = 80
@@ -485,6 +509,9 @@ def setup_app(app_net):
         if "url" in app_net and len(app_net["url"]) > 0:
             if re.match("^mqtt(s)?://", app_net["url"]):
                 logging.info("Call setup MQTT App")
+                setup_mqtt_app(app_net)
+            elif re.match("^wss://", app_net["url"]):
+                logging.info("Call setup MQTT WebSocket App")
                 setup_mqtt_app(app_net)
             elif re.match("^http(s)?://", app_net["url"]):
                 setup_http_app(app_net)
@@ -566,6 +593,12 @@ def mqtt_subscribe_to_app_topics_v1_1(appeui):
     logging.debug("subscribe for app messages: %s", topic)
     mqtt_clients[appeui].subscribe(str(topic), 1)
 
+    if default_app["apiVersion"] == api_v1_1_1:
+        topic = app_mqtt_v1_1_1_subscribe_clear_topic % (gw_uuid)
+        logging.debug("subscribe for app messages: %s", topic)
+        mqtt_clients[appeui].subscribe(str(topic), 1)
+    
+
 
 def mqtt_subscribe_to_custom_topics_v1_1(appeui):
     for dev in dev_list:
@@ -590,7 +623,7 @@ def mqtt_subscribe_to_app_topics(appeui):
         and apps[appeui]["options"]["cloudService"] == "AZURE"
     ):
         mqtt_subscribe_to_app_topics_azure(appeui)
-    elif default_app["apiVersion"] == api_v1_1:
+    elif default_app["apiVersion"].startswith(api_v1_1):
         mqtt_subscribe_to_app_topics_v1_1(appeui)
     else:
         mqtt_subscribe_to_app_topics_v1_0(appeui)
@@ -623,10 +656,12 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
             not "cloudService" in apps[userdata["eui"]]["options"]
             or apps[userdata["eui"]]["options"]["cloudService"] != "AZURE"
         ):
-            if default_app["apiVersion"] == api_v1_1:
+            if default_app["apiVersion"].startswith(api_v1_1):
                 client.will_set(
                     app_mqtt_v1_1_disconnected_topic % (gw_uuid), None, 1, retain=False
                 )
+                if default_app["apiVersion"] == api_v1_1_1:
+                    client.publish(app_mqtt_v1_1_1_connected_topic % (gw_uuid), None)
             else:
                 client.will_set(
                     app_mqtt_disconnected_topic % (userdata["eui"], gw_uuid),
@@ -634,6 +669,7 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
                     1,
                     retain=False,
                 )
+
 
         if lora_query_available:
             # resubscribe for downlinks
@@ -648,6 +684,17 @@ def on_mqtt_app_connect(client, userdata, flags, rc):
 
 
 def on_mqtt_app_message(client, userdata, msg):
+
+    # clear retained message
+    if msg.retain:
+        client.publish(msg.topic, None, 1, retain=True)
+
+    try:
+        json_data = json.loads(msg.payload)
+    except:
+        logging.error("Could not parse MQTT message payload as JSON")
+        return
+
     global local_client
     global gw_uuid
     global gateways
@@ -660,14 +707,15 @@ def on_mqtt_app_message(client, userdata, msg):
     if len(parts) == 3:
         topic_gwuuid = parts[1]
         event = parts[2]
-    else:
+    elif len(parts) > 3:
         appeui = parts[1]
         deveui = parts[2]
         if deveui == gw_uuid:
             topic_gwuuid = gw_uuid
         event = parts[3]
-
-    json_data = json.loads(msg.payload)
+    else:
+        logging.error("Could not parse message topic")
+        return
 
     if "deveui" in json_data:
         deveui = json_data["deveui"]
@@ -686,7 +734,7 @@ def on_mqtt_app_message(client, userdata, msg):
         # response sent to: $iothub/methods/res/0/?rid=1
 
         appeui = default_app["eui"]
-        deveui = gw_uuid
+        topic_gwuuid = deveui = gw_uuid
         json_data["topic"] = msg.topic
         if "?" in msg.topic and "=" in msg.topic.split("?")[1]:
             json_data["rid"] = msg.topic.split("?")[1].split("=")[1]
@@ -703,11 +751,22 @@ def on_mqtt_app_message(client, userdata, msg):
         or event == "downlink"
     ):
         if event == "downlink" and "deveui" in json_data:
-            new_json_data = {"rid": json_data["rid"]}
+            new_json_data = {}
+            if "rid" in json_data:
+                new_json_data = {"rid": json_data["rid"]}
             new_json_data["command"] = "packet queue add " + json.dumps(msg.payload)
-            app_lora_query_request(apps[appeui], json.dumps(new_json_data))
+            if appeui in apps:
+                app_lora_query_request(apps[appeui], json.dumps(new_json_data))
+            else:
+                logging.error("app for AppEUI (%s) not found", appeui)
+
+            return
         # Only the default_app server is allowed to make system requests for this gateway
         elif topic_gwuuid == gw_uuid:
+            if appeui not in apps:
+                logging.error("app for AppEUI (%s) not found", appeui)
+                return
+    
             if (
                 "requestOptions" in default_app
                 and default_app["requestOptions"]["api"]
@@ -744,6 +803,10 @@ def on_mqtt_app_message(client, userdata, msg):
             if appeui == gweui:
                 appeui = default_app["eui"]
 
+        if appeui not in apps:
+            logging.error("app for AppEUI (%s) not found", appeui)
+            return
+
         app_schedule_downlink(apps[appeui], deveui, msg.payload)
 
     if (
@@ -752,7 +815,11 @@ def on_mqtt_app_message(client, userdata, msg):
     ):
         # the appeui and deveui are not guaranteed to be in the topic, deveui must be in the payload
         appeui = default_app["eui"]
-        deveui = json.loads(msg.payload)["deveui"]
+        if ("deveui" in json_data):
+            deveui = json_data["deveui"]
+        else:
+            logging.error("DevEUI not included in downlink JSON")
+            return
 
         topic = default_app["options"]["downlinkTopic"] % {
             "appeui": appeui,
@@ -762,6 +829,7 @@ def on_mqtt_app_message(client, userdata, msg):
 
         # handle a possible wild cards
         topic = topic.split("#")[0]
+        topic_match = False
         if topic in msg.topic:
             topic_match = True
 
@@ -774,15 +842,27 @@ def on_mqtt_app_message(client, userdata, msg):
                     topic_match = True
 
         if topic_match:
+            if appeui not in apps:
+                logging.error("app for AppEUI (%s) not found", appeui)
+                return
             app_schedule_downlink(apps[appeui], deveui, msg.payload)
             return
 
     if (
-        "cloudService" in apps[appeui]["options"]
-        and apps[appeui]["options"]["cloudService"] == "AZURE"
+        "cloudService" in default_app["options"]
+        and default_app["options"]["cloudService"] == "AZURE"
     ):
+        # C2D AZURE message
+
         # the deveui are not guaranteed to be in the topic, deveui must be in the payload
-        deveui = json.loads(msg.payload)["deveui"]
+        # appeui is default_app eui
+        appeui = default_app["eui"]
+        if ("deveui" in json_data):
+            deveui = json_data["deveui"]
+        else:
+            logging.error("DevEUI not included in downlink JSON")
+            return
+
         topic = apps[appeui]["options"]["downlinkTopic"] % {
             "appeui": appeui,
             "deveui": deveui,
@@ -791,6 +871,7 @@ def on_mqtt_app_message(client, userdata, msg):
 
         # handle a possible wild cards
         topic = topic.split("#")[0]
+        topic_match = False
         if topic in msg.topic:
             topic_match = True
 
@@ -808,7 +889,7 @@ def on_mqtt_app_message(client, userdata, msg):
     if event == "clear":
         topic = local_mqtt_clear_topic % deveui
         with mqtt_client_locks["localhost"]:
-            local_client.publish(topic, None, 1, True)
+            local_client.publish(topic, None, 1)
 
 
 def app_log_query_request(app, msg):
@@ -836,7 +917,7 @@ def app_log_query_request(app, msg):
         # app_publish_msg(app, default_app["options"]["uplinkTopic"], data)
         app_publish_msg(app, "$iothub/methods/res/0/?$rid=" + json_obj["rid"], data)
     else:
-        if default_app["apiVersion"] == api_v1_1:
+        if default_app["apiVersion"].startswith(api_v1_1):
             app_publish_msg(app, app_mqtt_v1_1_log_result_topic % (gw_uuid), data)
         else:
             app_publish_msg(
@@ -870,7 +951,7 @@ def app_lora_query_request(app, msg):
             json_data["rid"] = json_obj["rid"]
             data = json.dumps(json_data)
 
-        if default_app["apiVersion"] == api_v1_1:
+        if default_app["apiVersion"].startswith(api_v1_1):
             app_publish_msg(app, app_mqtt_v1_1_lora_result_topic % (gw_uuid), data)
         else:
             app_publish_msg(
@@ -884,11 +965,23 @@ def app_api_request(app, msg):
     json_obj = json.loads(msg)
     method = json_obj["method"]
     path = json_obj["path"]
-    body = json_obj["body"]
-    headers = {"Content-type": "application/json", "Accept": "text/plain"}
 
     # try twice incase of connection error
     attempt = 0
+
+    if type(json_obj["body"]) == str or type(json_obj["body"]) == int or type(json_obj["body"]) == float:
+        body = json_obj["body"]
+    elif type(json_obj["body"]) == dict:
+        body = json.dumps(json_obj["body"])
+    elif type(json_obj["body"]) == type(None):
+        body = None
+    else:
+        # Fail before making API call with unexpected type
+        body = None
+        attempt = 3
+    
+    headers = {"Content-type": "application/json", "Accept": "text/plain"}
+
     while attempt < 2:
         try:
             local_http_client.request(method, path, body, headers)
@@ -934,7 +1027,7 @@ def app_api_request(app, msg):
                     }
                 )
 
-        if default_app["apiVersion"] == api_v1_1:
+        if default_app["apiVersion"].startswith(api_v1_1):
             app_publish_msg(app, app_mqtt_v1_1_api_result_topic % (gw_uuid), data)
         else:
             app_publish_msg(
@@ -967,7 +1060,7 @@ def app_schedule_downlink(app, deveui, msg):
     #     logging.info("Local broker disconnected")
     #     time.sleep(1)
 
-    local_client.publish(topic, msg, 1, True)
+    local_client.publish(topic, msg, 1)
 
 
 def app_publish_msg(app, topic, msg):
@@ -1029,7 +1122,7 @@ def app_publish_http(app, path, msg, retain=False):
                     sent = True
                     break
             except (IOError, KeyboardInterrupt) as e:
-                logging.error("Request exception", e)
+                logging.exception("Request exception", exc_info=e)
                 http_clients[app["eui"]].close()
             except (
                 BadStatusLine,
@@ -1038,7 +1131,7 @@ def app_publish_http(app, path, msg, retain=False):
                 CannotSendHeader,
                 MemoryError,
             ) as e:
-                logging.error("Response exception", e)
+                logging.exception("Response exception", exc_info=e)
                 http_clients[app["eui"]].close()
             finally:
                 retry = retry - 1
@@ -1052,6 +1145,9 @@ def app_publish_http(app, path, msg, retain=False):
             ):
                 http_uplink_queue[app["eui"]].get()
                 http_uplink_queue[app["eui"]].task_done()
+
+            if ("prefix" in app["options"]):
+                path = app["options"]["prefix"] + path
             http_uplink_queue[app["eui"]].put((path, msg))
 
     else:
@@ -1092,6 +1188,7 @@ def on_mqtt_connect(client, userdata, flags, rc):
     client.subscribe(local_mqtt_sub_joined, 1)
     client.subscribe(local_mqtt_sub_moved, 1)
     logging.info(userdata)
+
     if userdata and "eui" in userdata and userdata["eui"] in apps:
         apps[userdata["eui"]]["disconnected_flag"] = False
 
@@ -1115,7 +1212,7 @@ def on_mqtt_message(client, userdata, msg):
     # override appeui for all packets sent to default app client
     device_appeui = appeui
 
-    if default_app["apiVersion"] == api_v1_1 or default_app["disableFilter"]:
+    if default_app["apiVersion"].startswith(api_v1_1) or default_app["disableFilter"]:
         appeui = default_app["eui"]
 
     logging.debug("Device eui: " + deveui + " App eui: " + appeui + " Event: " + event)
@@ -1127,7 +1224,7 @@ def on_mqtt_message(client, userdata, msg):
             json_data = json.loads(msg.payload.decode("utf-8"))
 
             logging.debug("App eui: " + json_data["appeui"])
-            if default_app["apiVersion"] == api_v1_1 or default_app["disableFilter"]:
+            if default_app["apiVersion"].startswith(api_v1_1) or default_app["disableFilter"]:
                 device_appeui = json_data["appeui"]
             else:
                 appeui = json_data["appeui"]
@@ -1167,7 +1264,7 @@ def on_mqtt_message(client, userdata, msg):
                 not "cloudService" in apps[appeui]["options"]
                 or apps[appeui]["options"]["cloudService"] != "AZURE"
             ):
-                if default_app["apiVersion"] == api_v1_1:
+                if default_app["apiVersion"].startswith(api_v1_1):
                     joined_topic = app_mqtt_v1_1_joined_topic % (
                         gw_uuid,
                         device_appeui,
@@ -1271,7 +1368,7 @@ def on_mqtt_message(client, userdata, msg):
                     json_data["gwuuid"] = gw_uuid
                     json_data["gwserial"] = gw_serial
                     uplink_topic = apps[appeui]["options"]["uplinkTopic"] % json_data
-                elif default_app["apiVersion"] == api_v1_1:
+                elif default_app["apiVersion"].startswith(api_v1_1):
                     uplink_topic = app_mqtt_v1_1_uplink_topic % (
                         gw_uuid,
                         device_appeui,
@@ -1301,7 +1398,7 @@ def on_mqtt_message(client, userdata, msg):
                     not "cloudService" in apps[appeui]["options"]
                     or apps[appeui]["options"]["cloudService"] != "AZURE"
                 ):
-                    if default_app["apiVersion"] == api_v1_1:
+                    if default_app["apiVersion"].startswith(api_v1_1):
                         app_publish_msg(
                             apps[default_app["eui"]],
                             app_mqtt_v1_1_moved_topic
@@ -1347,7 +1444,7 @@ def on_mqtt_message(client, userdata, msg):
                         logging.debug("unsubscribe from app messages: %s", topic)
                         mqtt_clients[appeui].unsubscribe(str(topic), 1)
 
-                if default_app["apiVersion"] == api_v1_1:
+                if default_app["apiVersion"].startswith(api_v1_1):
                     return
 
                 # unsubscribe from topic_list using appeui, deveui, gw_uuid
@@ -1792,18 +1889,22 @@ if default_app["enabled"]:
     logging.info("Closing default app")
     if apps[default_app["eui"]]["isMqtt"]:
         logging.info("default app is connected %s", default_app["eui"])
-        if default_app["apiVersion"] == api_v1_1:
-            app_publish_msg(
-                apps[default_app["eui"]],
-                app_mqtt_v1_1_close_topic % (gw_uuid),
-                None,
-            )
-        else:
-            app_publish_msg(
-                apps[default_app["eui"]],
-                app_mqtt_close_topic % (default_app["eui"], gw_uuid),
-                None,
-            )
+        if (
+            not "cloudService" in default_app["options"]
+            or default_app["options"]["cloudService"] != "AZURE"
+        ):
+            if default_app["apiVersion"].startswith(api_v1_1):
+                app_publish_msg(
+                    apps[default_app["eui"]],
+                    app_mqtt_v1_1_close_topic % (gw_uuid),
+                    None,
+                )
+            else:
+                app_publish_msg(
+                    apps[default_app["eui"]],
+                    app_mqtt_close_topic % (default_app["eui"], gw_uuid),
+                    None,
+                )
         time.sleep(2)
         mqtt_clients[default_app["eui"]].disconnect()
         mqtt_clients[default_app["eui"]].loop_stop()
@@ -1833,7 +1934,7 @@ for app in app_list:
     if app["eui"] in mqtt_clients:
         if mqtt_clients[app["eui"]].is_connected():
             logging.info("app is connected %s", app["eui"])
-            if default_app["apiVersion"] == api_v1_1:
+            if default_app["apiVersion"].startswith(api_v1_1):
                 app_publish_msg(
                     apps[default_app["eui"]],
                     app_mqtt_v1_1_close_topic % (gw_uuid),
