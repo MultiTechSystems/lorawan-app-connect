@@ -466,6 +466,13 @@ def setup_http_app(app_net):
     else:
         port = 80
         if len(parts) == 3:
+
+            if ("/" in parts[2]):
+                p = parts[2].split("/")
+                parts[2] = p[0]
+                parts.append("/" + "/".join(p[1:]))
+                app_net["options"]["prefix"] = parts[3]
+
             port = int(parts[2])
 
         # http.client.HTTPConnection(host, port=None, [timeout, ]source_address=None, blocksize=8192
@@ -1111,6 +1118,9 @@ def app_publish_http(app, path, msg, retain=False):
         sent = False
         retry = 3
 
+        if ("prefix" in app["options"]):
+            path = app["options"]["prefix"] + path
+
         while retry and http_threads[app["eui"]]["running"]:
             try:
                 with http_threads[app["eui"]]["lock"]:
@@ -1146,8 +1156,6 @@ def app_publish_http(app, path, msg, retain=False):
                 http_uplink_queue[app["eui"]].get()
                 http_uplink_queue[app["eui"]].task_done()
 
-            if ("prefix" in app["options"]):
-                path = app["options"]["prefix"] + path
             http_uplink_queue[app["eui"]].put((path, msg))
 
     else:
@@ -1540,6 +1548,9 @@ def http_downlink_thread(appeui):
             continue
 
         path = app_http_downlink_path % (appeui)
+
+        if ("prefix" in apps[appeui]["options"]):        
+            path = apps[appeui]["options"]["prefix"] + path
 
         deveuis = http_app_devices[appeui]
         logging.debug("GET from '%s'", path)
