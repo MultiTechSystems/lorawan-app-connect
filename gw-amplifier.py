@@ -13,6 +13,8 @@ ip_addr = "172.16.0.221"
 ip_gw = "172.16.0.227"
 upstream_port = 1780
 downstream_port = 1782
+listen_up_port = 1780
+listen_down_port = 1782
 gw_eui_prefix = "008000DDDD00"
 sim_gw_rssi = 0
 sim_gw_snr = 0
@@ -21,8 +23,10 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--gw-count', type=int, default=sim_gateway_count, help='Number of simulated gateways')
 parser.add_argument('--bind-ip', type=str, default=ip_addr, help='IP address to bind the gateway amplifier')
 parser.add_argument('--gw-lns-ip', type=str, default=ip_gw, help='IP address of the gateway LNS')
-parser.add_argument('--up-port', type=int, default=upstream_port, help='Upstream port of the gateway LNS')
-parser.add_argument('--down-port', type=int, default=downstream_port, help='Downstream port of the gateway LNS')
+parser.add_argument('--up-port', type=int, default=upstream_port, help='Upstream port of the gateway LNS (default: 1780)')
+parser.add_argument('--down-port', type=int, default=downstream_port, help='Downstream port of the gateway LNS (default: 1782)')
+parser.add_argument('--listen-up-port', type=int, default=listen_up_port, help='Amplifier listening port for gateway uplinks (default: 1780)')
+parser.add_argument('--listen-down-port', type=int, default=listen_down_port, help='Amplifier listening port gateway downlinks (default: 1782)')
 parser.add_argument('--gw-eui-prefix', type=str, default=gw_eui_prefix, help='Prefix for the gateway EUI, 6 bytes hex string, example "008000DDDD00"')
 parser.add_argument('--rssi', type=int, default=sim_gw_rssi, help='RSSI value for simulated gateways (default: RANDOM)')
 parser.add_argument('--snr', type=int, default=sim_gw_rssi, help='SNR value for simulated gateways (default: RANDOM)')
@@ -34,6 +38,8 @@ ip_addr = args.bind_ip
 ip_gw = args.gw_lns_ip
 upstream_port = args.up_port
 downstream_port = args.down_port
+listen_up_port = args.listen_up_port
+listen_down_port = args.listen_down_port
 gw_eui_prefix = args.gw_eui_prefix
 sim_gw_rssi = args.rssi
 sim_gw_snr = args.snr
@@ -84,8 +90,8 @@ bufSize = 1024
 upstream_sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 downstream_sock = socket.socket(family=socket.AF_INET, type=socket.SOCK_DGRAM)
 
-upstream_sock.bind((ip_addr, upstream_port))
-downstream_sock.bind((ip_addr, downstream_port))
+upstream_sock.bind((ip_addr, listen_up_port))
+downstream_sock.bind((ip_addr, listen_down_port))
 
 
 pkf_up_addr = None
