@@ -70,7 +70,6 @@ down_messages = {
 
 
 proc_quit = False
-log_exceptions = False
 
 def signal_handler(sig, frame):
     global proc_quit
@@ -160,6 +159,7 @@ for t in downstream_threads:
 
 log_upstream = False
 log_downstream = False
+log_exceptions = False
 
 print("Sockets open, forwarding packets to", ip_gw);
 while (not proc_quit):
@@ -177,30 +177,32 @@ while (not proc_quit):
             new_msg = msg[0].replace(msg[0][4:12], gw_euis[i])
             if log_upstream: print("json parse:", msg[0][12:].decode('utf-8'))
             msg_json = json.loads(msg[0][12:].decode("utf-8"))
-            if (sim_gw_rssi != 0):
-                # Adjust RSSI for simulated gateways
-                if log_upstream: print("ADJUSTING RSSI FOR SIMULATED GATEWAY", i, "to", sim_gw_rssi)
-                msg_json["rxpk"][0]["rssi"] = sim_gw_rssi
-                msg_json["rxpk"][0]["rssis"] = sim_gw_rssi
-            else:
-                val = random.randint(-100, -20)
-                msg_json["rxpk"][0]["rssi"] = val 
-                msg_json["rxpk"][0]["rssis"] = val
+            if ("rxpk" in msg_json):
+                if (sim_gw_rssi != 0):
+                    # Adjust RSSI for simulated gateways
+                    if log_upstream: print("ADJUSTING RSSI FOR SIMULATED GATEWAY", i, "to", sim_gw_rssi)
+                    msg_json["rxpk"][0]["rssi"] = sim_gw_rssi
+                    msg_json["rxpk"][0]["rssis"] = sim_gw_rssi
+                else:
+                    val = random.randint(-100, -20)
+                    msg_json["rxpk"][0]["rssi"] = val 
+                    msg_json["rxpk"][0]["rssis"] = val
 
-            if (sim_gw_snr != 0):
-                # Adjust SNR for simulated gateways
-                if log_upstream: print("ADJUSTING SNR FOR SIMULATED GATEWAY", i, "to", sim_gw_snr)
-                msg_json["rxpk"][0]["lsnr"] = sim_gw_snr
-            else:
-                val = round((20.0 - random.random() * 40.0), 1)
-                msg_json["rxpk"][0]["lsnr"] = val
+                if (sim_gw_snr != 0):
+                    # Adjust SNR for simulated gateways
+                    if log_upstream: print("ADJUSTING SNR FOR SIMULATED GATEWAY", i, "to", sim_gw_snr)
+                    msg_json["rxpk"][0]["lsnr"] = sim_gw_snr
+                else:
+                    val = round((20.0 - random.random() * 40.0), 1)
+                    msg_json["rxpk"][0]["lsnr"] = val
             
-            new_msg = new_msg[:12] + bytearray(json.dumps(msg_json), 'utf-8')
+                new_msg = new_msg[:12] + bytearray(json.dumps(msg_json), 'utf-8')
+
             if log_upstream: print("ADJUSTED JSON:", msg_json)
             if log_upstream: print("upstream", i, new_msg)
             upstream_clients[i+1].sendto(new_msg, up_server)
-#    except:
-#        pass
+    except TimeoutError:
+        pass
     except Exception:
         if log_exceptions:
             print("upstream exc :", msg)
